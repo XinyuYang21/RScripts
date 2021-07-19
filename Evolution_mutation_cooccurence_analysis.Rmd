@@ -1,0 +1,221 @@
+---
+title: "Evolution_mutation_cooccurence_Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(TCGAmutations)
+library(tidyverse)
+library(maftools)
+
+lapply(tcga_available()$Study_Abbreviation, function(i) tcga_load(i))
+
+lstObject <- lapply(ls()[grep("mc3", ls())], function(i) eval(parse(text=i)))
+
+mergeMaf<- merge_mafs(lstObject)
+
+save(mergeMaf, file="~/OneDrive - University of Glasgow/Evolution/Figures and Data/TCGA_Mutation_mafObject.RData")
+```
+
+
+
+## Somatic Interaction Analysis
+
+```{r}
+library(tidyverse)
+library(magrittr)
+library(maftools)
+
+source('~/OneDrive - University of Glasgow/Evolution/RScripts/oncomatrix.R')
+source('~/OneDrive - University of Glasgow/Evolution/RScripts/getInteractions.R')
+
+load(file="~/OneDrive - University of Glasgow/Evolution/Figures and Data/TCGA_Mutation_mafObject.RData")
+
+
+# Subset mutational data based on evolutionary subtype
+
+man <- read_csv("/Users/peterbailey/OneDrive - University of Glasgow/Evolution/Figures and Data/ESigs_integrated_measure_4146_20210501.csv")
+
+ccf <- read_csv("~/OneDrive - University of Glasgow/Evolution/Figures and Data/CCF_transition/gene_ks_fisher_table_4000_20210502.csv")
+
+manSelect <- man %>% select(c("samplename", "subtype", "cancertype.x")) %>% filter(subtype %in% c("ESig4"))
+
+ksByCancer <- ccf %>% filter(cancertype %in% c("All")) %>% filter(significant_ks == 1)
+
+geneCounts <- ksByCancer %>% count(Gene, sort = TRUE, name = "n_genes_across_cancertype")
+
+oncoPath <- read_csv("~/OneDrive - University of Glasgow/Evolution/Figures and Data/Oncogenic_pathways.csv")
+oncoPath <- oncoPath[!duplicated(oncoPath$Gene), ]
+
+mafEsig4 <- subsetMaf(mergeMaf, tsb=manSelect$samplename, genes = geneCounts$Gene)
+
+
+# Perform somatic interaction analysis - limit to top 30 mutated genes (this can be expanded)
+
+res <- getInteractions(mafEsig4, top=30, colPal = "PRGn", returnAll = TRUE, sigSymbolsSize=1.5)
+
+resMatrix <- t(res$interactions)
+
+
+# Generate upper triangle interaction heatmap
+
+Heatmap(resMatrix, cluster_rows = F, cluster_columns = F, na_col = "white", col=colorRamp2(c(-3, 0, 3), c("#1B7837", "white", "#762A83")), row_names_side = "left", rect_gp = gpar(col = "white", lwd = 2), cell_fun = function(j, i, x, y, width, height, fill) {
+    if(!is.na(resMatrix[i, j])){
+      if(10^-abs(resMatrix[i, j]) < 0.01)
+        grid.points(x, y, pch = 42, size = unit(1.5, "mm"), gp = gpar(col="white", fill = "white"))
+      if(10^-abs(resMatrix[i, j]) < 0.05)
+        grid.points(x, y, pch = 46, size = unit(1.5, "mm"), gp = gpar(col="white", fill = "white"))
+      if(10^-abs(resMatrix[i, j]) > 0.05)
+        grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "white", fill = "#F5F5F5"))
+    }
+  })
+
+
+# Generate Heatmap showing individual interactions according to common oncogenic pathways
+
+oddsRatioTable <- inner_join(res$pairs, oncoPath, by=c("gene1"="Gene"))
+oddsRatioTable <- oddsRatioTable %>% mutate(qvalue=p.adjust(pValue, method="BH"))
+oddsRatioTableSel <- inner_join(oddsRatioTable, oncoPath, by=c("gene2"="Gene")) %>% filter(qvalue < 0.05) # Remove qvalue filter for individual cancer types
+
+
+oncPathwayTab <- lapply(unique(oddsRatioTableSel$Pathway.x), function(i){
+  onc <- oddsRatioTableSel %>% filter(Pathway.x == i | Pathway.y == i)
+  oncmod <- onc  %>% mutate(geneA=ifelse(Pathway.x == i, gene1, gene2)) %>% mutate(geneB=ifelse(Pathway.x != i, gene1, gene2))
+  oncmod<- inner_join(oncmod, oncoPath, by=c("geneA"="Gene"))
+  oncmod <- inner_join(oncmod, oncoPath, by=c("geneB"="Gene"))
+  oncmod <- oncmod %>% arrange(Pathway.y.y)
+  oncmod
+})
+
+
+joint <- do.call('rbind', oncPathwayTab) %>% as.data.frame()
+
+breaks <- seq(-3,3,length.out=dim(joint)[1])
+interactions4plot  <- joint$log10pval
+interactions4plot[interactions4plot < (-5)] <- -5
+interactions4plot[interactions4plot > 5] <- 5
+joint <- joint %>% mutate(log10pval=interactions4plot)
+
+
+medianMat <- joint %>% select(c("geneA", "geneB", "log10pval")) %>% spread(geneB, log10pval) %>% set_rownames(.$geneA) %>% as.matrix()
+rnames <- medianMat[, "geneA"]
+medianMat <- medianMat[,-1, drop=F]
+class(medianMat) <- "numeric"
+medianMat[is.na(medianMat)] <- 0
+rownames(medianMat) <- rnames
+
+path <- joint$Pathway.x.x
+names(path) <- joint$geneA
+path <- path[rownames(medianMat)]
+clasn <- joint$Pathway.y.y
+names(clasn) <- joint$geneB
+clasn <- clasn[colnames(medianMat)]
+claso <- sort(clasn)
+
+medianMat <- medianMat[, names(claso)]
+
+library(ComplexHeatmap)
+library(circlize)
+library(ggsci)
+library(RColorBrewer)
+
+mypal <- colorRampPalette(pal_nejm("default", alpha = 1)(8))(18)
+
+ha1 <- HeatmapAnnotation(Class = claso, col = list(Class=structure(names=c("Cell_Cycle", "Chromatin_modifiers", "Notch", "NRF2", "PI3K", "RTK_RAS", "TGF-Beta", "TP53", "WNT", "Hippo", "Myc"), mypal[1:11])), na_col = "grey", show_annotation_name = TRUE, annotation_name_gp = gpar(fontsize = 8), show_legend=TRUE)
+
+Heatmap(medianMat, split=path, column_split =claso, top_annotation = ha1, col=colorRamp2(c(-5, 0, 5), c("#1B7837", "white", "#762A83")), cluster_rows = F, gap=unit(0.5, "cm"), cluster_columns = F, show_column_dend = FALSE, show_row_dend = FALSE, row_names_gp = gpar(fontsize = 10),  show_row_names = TRUE,    row_names_max_width = unit(20, "cm"), row_names_side = "right", show_column_names = TRUE, column_names_gp = gpar(fontsize = 10), show_heatmap_legend = TRUE, name="-Log10\n(Pval)", row_title_gp = gpar(fontsize = 8), row_title_rot = 0,  cell_fun = function(j, i, x, y, width, height, fill) {
+    if(!is.na(medianMat[i, j])){
+      if(10^-abs(medianMat[i, j]) < 0.01)
+        grid.points(x, y, pch = 42, size = unit(1.5, "mm"), gp = gpar(col = "white",fill = "white"))
+      if(10^-abs(medianMat[i, j]) < 0.05)
+        grid.points(x, y, pch = 46, size = unit(1.5, "mm"), gp = gpar(col = "white",fill = "white"))
+      if(10^-abs(medianMat[i, j]) > 0.05)
+        grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "white", fill = "#F5F5F5"))
+    }
+  }, border=T)
+
+
+```
+
+
+
+## Oncoplot showing top 30 mutated genes and their relationship
+```{r}
+
+mycolors <- c("#397FB8", "#E21E26", "#984F9F", "#E21E26", "#E21E26", "#EBD71F", "#EBD71F", "#000000")
+names(mycolors) <- c("Missense_Mutation", "Nonsense_Mutation", "Splice_Site", "Frame_Shift_Del",
+                    "Frame_Shift_Ins", "In_Frame_Del", "In_Frame_Ins", "Multi_Hit")
+
+# Generate Maf object with cancertype variable
+
+mafTemp   <- mafEsig4@data
+clinicalTemp <- getSampleSummary(x = mafEsig4)
+clinicalTemp <- inner_join(clinicalTemp, manSelect, by = c("Tumor_Sample_Barcode"="samplename")) %>% select(c("Tumor_Sample_Barcode","subtype", "cancertype.x"))
+mafClinical = read.maf(maf = mafTemp, clinicalData = clinicalTemp)
+
+fabcolors <- colorRampPalette(pal_nejm("default", alpha = 1)(8))(17)
+names(fabcolors) <- c("BLCA","BRCA","COAD","GBM","HNSC","KIRC","KIRP","LIHC","LUAD","LUSC","OV","PAAD","PRAD","SKCM","STAD","UCEC","READ")
+fabcolors <- list(cancertype.x = fabcolors)
+
+oncoplot(maf = mafClinical, top=30, removeNonMutated = FALSE, colors = mycolors, annotationColor=fabcolors, drawRowBar = TRUE, sortByAnnotation = TRUE, keepGeneOrder = FALSE, clinicalFeatures = 'cancertype.x', bgCol="#F5F5F5", annotationOrder=c("BLCA","BRCA","COAD","GBM","HNSC","KIRC","KIRP","LIHC","LUAD","LUSC","OV","PAAD","PRAD","SKCM","STAD","UCEC","READ"))
+
+```
+
+
+
+## Perform somatic interaction analysis using oncogenic pathways
+
+```{r}
+
+# Generate a MAF object where genes have been mapped to pathways
+oncoPath <- read_csv("~/OneDrive - University of Glasgow/Evolution/Figures and Data/Oncogenic_pathways.csv")
+oncoPath <- oncoPath[!duplicated(oncoPath$Gene), ]
+
+mafTemp   <- mafEsig4@data
+mafTemp <- inner_join(mafTemp, oncoPath, by = c("Hugo_Symbol"="Gene"))
+colnames(mafTemp)[1] <- "Hugo_Symbol_Gene"
+colnames(mafTemp)[23] <- "Hugo_Symbol"
+
+clinicalTemp <- getSampleSummary(x = mafEsig4)
+clinicalTemp <- inner_join(clinicalTemp, manSelect, by = c("Tumor_Sample_Barcode"="samplename")) %>% select(c("Tumor_Sample_Barcode","subtype", "cancertype.x"))
+mafClinical = read.maf(maf = mafTemp, clinicalData = clinicalTemp)
+
+
+# Generate oncolplot for the individual pathways
+
+fabcolors <- colorRampPalette(pal_nejm("default", alpha = 1)(8))(17)
+names(fabcolors) <- c("BLCA","BRCA","COAD","GBM","HNSC","KIRC","KIRP","LIHC","LUAD","LUSC","OV","PAAD","PRAD","SKCM","STAD","UCEC","READ")
+fabcolors <- list(cancertype.x = fabcolors)
+
+oncoplot(maf = mafClinical, genes = c("Chromatin_modifiers","RTK_RAS","TP53","PI3K","WNT","Cell_Cycle","Notch","NRF2","Hippo","TGF-Beta","Myc"), removeNonMutated = FALSE, colors = mycolors, annotationColor=fabcolors, drawRowBar = TRUE, sortByAnnotation = TRUE, keepGeneOrder = FALSE, clinicalFeatures = 'cancertype.x', bgCol="#F5F5F5", annotationOrder=c("BLCA","BRCA","COAD","GBM","HNSC","KIRC","KIRP","LIHC","LUAD","LUSC","OV","PAAD","PRAD","SKCM","STAD","UCEC","READ"))
+
+
+# Perform interaction analysis using oncogenic pathway data
+
+res <- getInteractions(mafClinical, top=10, colPal = "PRGn", returnAll = TRUE, sigSymbolsSize=1.5)
+
+
+# Generate heatmap showing the interactions
+
+resMatrix <- t(res$interactions)
+
+Heatmap(resMatrix, cluster_rows = F, cluster_columns = F, na_col = "white", col=colorRamp2(c(-3, 0, 3), c("#1B7837", "white", "#762A83")), row_names_side = "left", rect_gp = gpar(col = "white", lwd = 2), cell_fun = function(j, i, x, y, width, height, fill) {
+    if(!is.na(resMatrix[i, j])){
+      if(10^-abs(resMatrix[i, j]) < 0.05)
+        grid.points(x, y, pch = 42, size = unit(1.5, "mm"), gp = gpar(fill = "white"))
+      if(10^-abs(resMatrix[i, j]) > 0.05)
+        grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "white", fill = "#F5F5F5"))
+    }
+  })
+
+
+# Generate oncostrip showing specific the interactions
+
+oncostrip(maf =  mafClinical, genes = c("TP53","Cell_Cycle", "PI3K"), removeNonMutated =TRUE, colors = mycolors, keepGeneOrder = FALSE,  bgCol="#F5F5F5")
+```
