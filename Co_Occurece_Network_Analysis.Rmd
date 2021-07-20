@@ -51,8 +51,8 @@ editor_options:
 
 ```{r cars}
 
-  man = read.csv(paste0(folder_path,"Figures and Data/ESigs_integrated_measure_4146_20210501.csv"))
-  ks = read.csv(paste0(folder_path,"Figures and Data/CCF_transition/gene_ks_fisher_table_4000_20210502.csv"))
+  Esig_path = paste0(folder_path,"Figures and Data/ESigs_integrated_measure_4146_20210501.csv")
+  ks_path = paste0(folder_path,"Figures and Data/CCF_transition/gene_ks_fisher_table_4000_20210502.csv")
   oncoPath <-  read.csv(paste0(folder_path,"Figures and Data/Oncogenic_pathways.csv"))
   
   types= unique(man$cancertype)
@@ -63,27 +63,15 @@ editor_options:
   for (i in types) {
     
     if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
-   
-    sample_filter <- man %>% 
-      dplyr::select(c("samplename", "subtype", "cancertype.x")) %>% 
-      filter(subtype %in% c("ESig4"),cancertype.x %in% typesMaf)
-      #filter(subtype %in% c("ESig3"),cancertype.x %in% typesMaf)
     
     gene_filter <- ks %>%
       filter(cancertype %in% paste0(sort(i),collapse  = "")) %>% 
       filter(significant_ks == 1)
     
     # get ccf file for filtered samples
-    ccf_dir = dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))]
+    ccf_path = dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))]
     
-    for (j in 1:length(ccf_dir) ) {
-      if (j==1) ccf_all= get(load(paste0(folder_path,"Figures and Data/CCF/",ccf_dir[1]))) else 
-        ccf_all = rbind(ccf_all,get(load(paste0(folder_path,"Figures and Data/CCF/",ccf_dir[j]))))
-    }
-    ccf_filter = ccf_all %>% 
-      mutate(samplename = substr(Matched_Norm_Sample_Barcode,1,12)) %>%
-      filter(samplename %in% sample_filter$samplename)
-    
+   
     
     # Set top genes for co-occurrence analsysis, ccf types as the x axis and maximum p value filtered as network
     top_gene=30;ccf_type="median_ccf";p_value=0.05
@@ -98,7 +86,7 @@ editor_options:
     if (!dir.exists(output_folder)) dir.create(output_folder)
     output=paste0(output_folder,i,"_",top_gene,"genes_",ccf_type,"_",nrow(sample_filter),"_samples_",p_value,".pdf")
     
-    Coocrrence_network_plot(types=i,ksByCancer=gene_filter,manSelect=sample_filter,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,ccf_all= ccf_filter,oncoPath=oncoPath)
+    Coocrrence_network_plot(types=i,Esig_path=man,ks_path=ks,ccf_path=ccf_path,manSelect=sample_filter,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,ccf_all= ccf_filter,oncoPath=oncoPath)
     
   }
 
