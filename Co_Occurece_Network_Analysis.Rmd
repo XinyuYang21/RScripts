@@ -71,8 +71,8 @@ editor_options:
     # get ccf file for filtered samples
     ccf_path = dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))]
     
+    manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i,subtype %in% c("ESig3","ESig4")) 
    
-    
     # Set top genes for co-occurrence analsysis, ccf types as the x axis and maximum p value filtered as network
     top_gene=30;ccf_type="median_ccf";p_value=0.05
     # top_gene=50;ccf_type="median_ccf";p_value=0.05
@@ -81,18 +81,98 @@ editor_options:
     # top_gene=50;ccf_type="mean_ccf";p_value=0.05
     # top_gene=30;ccf_type="mean_ccf";p_value=0.05
     # top_gene=30;ccf_type="mean_ccf";p_value=0.01
+    oncoplot.feature=ifelse(i %in% c("COADREAD","STAD","UCEC"),c("Subtype","Escape","Tcell_score"),NA)
+    
     
     output_folder = paste0(folder_path,"Figures and Data/Concurrence_network_",Sys.Date(),"/")
     if (!dir.exists(output_folder)) dir.create(output_folder)
-    output=paste0(output_folder,i,"_",top_gene,"genes_",ccf_type,"_",nrow(sample_filter),"_samples_",p_value,".pdf")
+    output=paste0(output_folder,i,"_ESig3,4_",top_gene,"genes_",ccf_type,"_",nrow(manSelect),"_samples_",p_value,".pdf")
     
-    Coocrrence_network_plot(types=i,Esig_path=man,ks_path=ks,ccf_path=ccf_path,manSelect=sample_filter,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,ccf_all= ccf_filter,oncoPath=oncoPath)
+    Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature)
     
   }
-
-  # Trevor.Graham.et.al <- read.delim("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Trevor Graham et al.txt")
-  # colnames(  Trevor.Graham.et.al)[1] = "samplename"
-
   
+  
+      # Trevor.Graham.et.al <- read.delim("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Trevor Graham et al.txt")
+    # colnames(  Trevor.Graham.et.al)[1] = "samplename"
+  install.packages('alluvial')
+  library(alluvial)
+  library(reshape2)
+  grid.newpage()
+  data.grame(subtype=c("MMR","MSS","POLE"))
+  
+  ccf_all %>%
+    filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
+    mutate(Matched_Norm_Sample_Barcode=substr(Matched_Norm_Sample_Barcode,1,12)) %>%
+    left_join(oncoPath,by=c("Hugo_Symbol"="Gene")) %>%
+    left_join(manSelect[,c("samplename","Subtype")],by=c("Matched_Norm_Sample_Barcode"="samplename")) %>%
+    select(Matched_Norm_Sample_Barcode,Pathway,Hugo_Symbol,ccube_ccf,Subtype) %>%
+    mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) 
+  
+   data.grame(subtype=c("MMR","MSS","POLE"),
+              RTK_RAS=)
+  
+     dcast(Matched_Norm_Sample_Barcode~Pathway+Hugo_Symbol)
+    ggplot(aes(Hugo_Symbol, id =Matched_Norm_Sample_Barcode, split = Subtype, value = 1))  
+  
+  nodes_d3 <- mutate(nodes, id = id - 1)
+  edges_d3 <- mutate(edges, from = from - 1, to = to - 1)
+
+    dcast(Matched_Norm_Sample_Barcode~Pathway,value.var = "Hugo_Symbol")
+  nodes %>% distinct(label,.keep_all = TRUE) %>%
+    filter(!is.na(group)) %>%
+    ggplot(aes(group, id = id, split = value, value = 1))  +
+    geom_parallel_sets() 
+  
+ 
+  
+  nodes %>% 
+    alluvial()
+  
+  karate_d3 <- igraph_to_networkD3(net)
+ forceNetwork(Links = karate_d3$links, Nodes = karate_d3$nodes)
+  net
+  
+  library(networkD3)
+  sankeyNetwork(Links = edges, Nodes = nodes, fontSize = 12, nodeWidth = 30,NodeID = "label",Source = 'source',
+             Target = 'target')
+  dev.off()
+  tit <- as.data.frame(Titanic, stringsAsFactors = FALSE)
+head(tit)
+alluvial(tit[,1:4], freq=tit$Freq,
+         col = ifelse(tit$Survived == "Yes", "orange", "grey"),
+         border = ifelse(tit$Survived == "Yes", "orange", "grey"),
+         hide = tit$Freq == 0,
+         cex = 0.7
+)
+  
+```
+```{r}
+POLE_sample = subset(manSelect,Subtype=="POLE")
+    MSS_sample = subset(manSelect,Subtype=="MSS")[1:6,]
+    MRR_sample = subset(manSelect,Subtype=="MMR")[1:6,]
+    example_sample = rbind(POLE_sample,MSS_sample,MRR_sample)
+    install.packages("ggh4x")
+    library(ggh4x)
+    ccf_filter %>% filter(samplename %in% example_sample$samplename) %>%
+      left_join(example_sample,by="samplename") %>%
+      mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) %>%
+      filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
+      ggplot()+geom_point(aes(x=ccube_ccf,y=Hugo_Symbol)) +
+      facet_nested(.~Subtype+samplename)+
+      #facet_grid(cols=vars(samplename))+
+      theme(axis.text.x = element_text(angle=90))+
+      labs(title="COADREAD-POLE",subtitle="ksByCancer")
+    
+    ccf_filter %>% filter(samplename %in% example_sample$samplename) %>%
+      left_join(example_sample,by="samplename") %>%
+      mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) %>%
+      filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
+      ggplot()+geom_boxplot(aes(x=ccube_ccf,y=Hugo_Symbol)) +
+      facet_nested(.~Subtype)+
+      #facet_grid(cols=vars(samplename))+
+      theme(axis.text.x = element_text(angle=90))+
+      labs(title="COADREAD-POLE",subtitle="ksByCancer")
+    
 ```
 
