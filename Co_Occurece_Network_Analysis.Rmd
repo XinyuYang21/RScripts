@@ -9,6 +9,8 @@ editor_options:
   library(TCGAmutations)
   library(tidyverse)
   library(maftools)
+  devtools::install_github("ShixiangWang/maftools")
+
   library(ComplexHeatmap)
   library(TCGAmutations)
   library(tidyverse)
@@ -39,12 +41,14 @@ editor_options:
   library(ggforce)
   library(concaveman)
   library(patchwork)
+  library(ggplotify)
+  #delete dplyr - #count
 
   folder_path = "C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/"
 
   source(paste0(folder_path,'Figures and Data/RScripts/oncomatrix.R'))
   source(paste0(folder_path,'Figures and Data/RScripts/getInteractions.R'))
-  source(paste0(folder_path,'Figures and Data/RScripts/occurrence_network_plot.R'))
+  source(paste0(folder_path,'Figures and Data/RScripts/network_plot.R'))
 ```
 
 ## Run 
@@ -54,25 +58,28 @@ editor_options:
   Esig_path = paste0(folder_path,"Figures and Data/ESigs_integrated_measure_4146_20210501.csv")
   ks_path = paste0(folder_path,"Figures and Data/CCF_transition/gene_ks_fisher_table_4000_20210502.csv")
   oncoPath <-  read.csv(paste0(folder_path,"Figures and Data/Oncogenic_pathways.csv"))
+  dir_all = dir(paste0(folder_path,"Figures and Data/CCF/"))
   
   types= unique(man$cancertype)
-  types = c("COADREAD")
+  types = c("COADREAD","UCEC","STAD")
  
-  dir_all = dir(paste0(folder_path,"Figures and Data/CCF/"))
-  i = types
+
+  i = "COADREAD"
+   types = "COADREAD"
   for (i in types) {
     
     if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
     
-    gene_filter <- ks %>%
-      filter(cancertype %in% paste0(sort(i),collapse  = "")) %>% 
-      filter(significant_ks == 1)
+    # gene_filter <- read.csv(file=ks_path) %>%
+    #   filter(cancertype %in% paste0(sort(i),collapse  = "")) %>% 
+    #   filter(significant_ks == 1)
     
     # get ccf file for filtered samples
     ccf_path = dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))]
-    
-    manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i,subtype %in% c("ESig3","ESig4")) 
-   
+
+    manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i,subtype %in% c("ESig3","ESig4"))  %>%
+      mutate(Clonal_neoantigen_cat=cut(.$Clonal_neoantigen,breaks=c(0,10,50,100,500,1000),labels=c("0-10","10-50","50-100","100-500","500-1000")))
+    #manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i,Subtype !="MSS") 
     # Set top genes for co-occurrence analsysis, ccf types as the x axis and maximum p value filtered as network
     top_gene=30;ccf_type="median_ccf";p_value=0.05
     # top_gene=50;ccf_type="median_ccf";p_value=0.05
@@ -81,17 +88,33 @@ editor_options:
     # top_gene=50;ccf_type="mean_ccf";p_value=0.05
     # top_gene=30;ccf_type="mean_ccf";p_value=0.05
     # top_gene=30;ccf_type="mean_ccf";p_value=0.01
-    oncoplot.feature=ifelse(i %in% c("COADREAD","STAD","UCEC"),c("Subtype","Escape","Tcell_score"),NA)
+    if (i %in% c("COADREAD","STAD","UCEC"))  oncoplot.feature=c("Subtype","Escape","Tcell_score","Clonal_neoantigen_cat") else
+      oncoplot.feature=NA
     
+    Subtype_colors <- colorRampPalette(pal_nejm("default", alpha = 1)(8))(8)[2:4]
+    Escape_colors <- c(colorRampPalette(pal_jco("default", alpha = 1)(8))(9)[c(1,2,4:5)],"springgreen3","grey40")
+    Tscore <- c(pal_npg(palette = c("nrc"), alpha = 1)(2),"lightpink")
+    c_neo <- RColorBrewer::brewer.pal(name="Oranges",n=5)
+   
+    scales::show_col(Escape_colors)
+    scales::show_col(Tscore)
+    names(Subtype_colors ) <- c("POLE","MSS","MMR")
+    names(Escape_colors) = c("AI","HLA_LOH","CHECKPOINT","CHECKPOINT_&_LOH","COMBINATION","NONE")
+    names(Tscore) = c("low","medium","high")
+    names(c_neo) = c("0-10","10-50","50-100","100-500","500-1000")
+
+  
+    fabcolors <- list(Subtype = Subtype_colors,Escape=Escape_colors,Tcell_score=Tscore,Clonal_neoantigen_cat=c_neo)
+  
     
     output_folder = paste0(folder_path,"Figures and Data/Concurrence_network_",Sys.Date(),"/")
     if (!dir.exists(output_folder)) dir.create(output_folder)
     output=paste0(output_folder,i,"_ESig3,4_",top_gene,"genes_",ccf_type,"_",nrow(manSelect),"_samples_",p_value,".pdf")
     
-    Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature)
+    Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature,oncoplot.feature.col=fabcolors)
     
   }
-  
+
   
       # Trevor.Graham.et.al <- read.delim("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Trevor Graham et al.txt")
     # colnames(  Trevor.Graham.et.al)[1] = "samplename"
@@ -112,39 +135,6 @@ editor_options:
    data.grame(subtype=c("MMR","MSS","POLE"),
               RTK_RAS=)
   
-     dcast(Matched_Norm_Sample_Barcode~Pathway+Hugo_Symbol)
-    ggplot(aes(Hugo_Symbol, id =Matched_Norm_Sample_Barcode, split = Subtype, value = 1))  
-  
-  nodes_d3 <- mutate(nodes, id = id - 1)
-  edges_d3 <- mutate(edges, from = from - 1, to = to - 1)
-
-    dcast(Matched_Norm_Sample_Barcode~Pathway,value.var = "Hugo_Symbol")
-  nodes %>% distinct(label,.keep_all = TRUE) %>%
-    filter(!is.na(group)) %>%
-    ggplot(aes(group, id = id, split = value, value = 1))  +
-    geom_parallel_sets() 
-  
- 
-  
-  nodes %>% 
-    alluvial()
-  
-  karate_d3 <- igraph_to_networkD3(net)
- forceNetwork(Links = karate_d3$links, Nodes = karate_d3$nodes)
-  net
-  
-  library(networkD3)
-  sankeyNetwork(Links = edges, Nodes = nodes, fontSize = 12, nodeWidth = 30,NodeID = "label",Source = 'source',
-             Target = 'target')
-  dev.off()
-  tit <- as.data.frame(Titanic, stringsAsFactors = FALSE)
-head(tit)
-alluvial(tit[,1:4], freq=tit$Freq,
-         col = ifelse(tit$Survived == "Yes", "orange", "grey"),
-         border = ifelse(tit$Survived == "Yes", "orange", "grey"),
-         hide = tit$Freq == 0,
-         cex = 0.7
-)
   
 ```
 ```{r}

@@ -193,7 +193,8 @@ fabcolors <- colorRampPalette(pal_nejm("default", alpha = 1)(8))(17)
 names(fabcolors) <- c("BLCA","BRCA","COAD","GBM","HNSC","KIRC","KIRP","LIHC","LUAD","LUSC","OV","PAAD","PRAD","SKCM","STAD","UCEC","READ")
 fabcolors <- list(cancertype.x = fabcolors)
 
-oncoplot(maf = mafClinical, genes = c("Chromatin_modifiers","RTK_RAS","TP53","PI3K","WNT","Cell_Cycle","Notch","NRF2","Hippo","TGF-Beta","Myc"), removeNonMutated = FALSE, colors = mycolors, annotationColor=fabcolors, drawRowBar = TRUE, sortByAnnotation = TRUE, keepGeneOrder = FALSE, clinicalFeatures = 'cancertype.x', bgCol="#F5F5F5", annotationOrder=c("BLCA","BRCA","COAD","GBM","HNSC","KIRC","KIRP","LIHC","LUAD","LUSC","OV","PAAD","PRAD","SKCM","STAD","UCEC","READ"))
+
+oncoplot(maf = mafClinical, genes = c("Chromatin_modifiers","RTK_RAS","TP53","PI3K","WNT","Cell_Cycle","Notch","NRF2","Hippo","TGF-Beta","Myc"), removeNonMutated = FALSE, colors = mycolors, annotationColor=fabcolors, drawRowBar = TRUE, sortByAnnotation = TRUE, keepGeneOrder = FALSE, clinicalFeatures = 'cancertype.x', bgCol="#F5F5F5", annotationOrder=c("BLCA","BRCA","COAD","GBM","HNSC","KIRC","KIRP","LIHC","LUAD","LUSC","OV","PAAD","PRAD","SKCM","STAD","UCEC","READ")) )
 
 
 # Perform interaction analysis using oncogenic pathway data

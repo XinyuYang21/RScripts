@@ -1,0 +1,364 @@
+---
+title: "ks_wilcox_test_20210726"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(dplyr)
+install.packages("")
+library(EvoSig)
+library(reshape2)
+library(plyr) #.
+library(ggplot2)
+library(ggpubr)
+source(paste0(folder_path,'Figures and Data/RScripts/help_function.R'))
+
+folder_path = "C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/"
+
+clinical = read.csv(file=paste0(folder_path,"Figures and Data/ESigs_integrated_measure_4146_20210501.csv"))
+
+immune_measures_mapping <-
+      read.csv(paste0(folder_path,"/Figures and Data/integrated_measures_annotation.csv")) %>%
+      arrange(Cluster) %>%
+      filter(Cluster!="Survival")
+
+colnames(immune_measures_mapping)[1] = "variable"
+```
+
+```{r}
+cor.table = function(df,var_idx,sig_idx,delete_0=TRUE,min_n=30){
+  
+  if (delete_0) df[,c(sig_idx,var_idx)] <- apply(df[,c(sig_idx,var_idx)],2,function(x) replace(x,x==0,NA)) # avoid 0 and zero-deviation
+
+  # for (i in var_idx)
+  #   for (j in sig_idx) {
+  #       summary = rbind(summary,c(i,j,length(which(!apply(is.na(df[,c(i,j)]),1,any)))))
+  #   }
+  # colnames(summary) = c("var_idx","sig_idx","n")
+  # 
+  # summary = as.data.frame(summary[-1,]) %>% dcast(var_idx~sig_idx,value.var = "n") %>%
+  #   mutate(min=apply(.[,-1],1,min)) %>%
+  #   filter(min>min_n)
+  # var_idx= summary$var_idx
+
+  res <- psych::corr.test(df[,c(var_idx)],df[,c(sig_idx)],method = "spearman",use = "pairwise",adjust="BH",ci=FALSE)
+  if (!is.null(res)) {
+    r = melt(res['r']) %>% dplyr::rename(r = value) %>% dplyr::select(-L1)
+    p = melt(res['p']) %>% dplyr::rename(adj.p = value) %>% dplyr::select(-L1)
+    n = melt(res['n']) %>% dplyr::rename(n = value) %>% dplyr::select(-L1)
+
+    cor_table = left_join(r,p,by=c("Var1","Var2"))
+    if (ncol(n)>1) {
+      cor_table %>%
+        left_join(n,by=c("Var1","Var2")) %>%
+        mutate(n=as.numeric(n),significant=ifelse(adj.p<0.05,1,0))
+    } else {
+      cor_table %>%
+        mutate(n=as.numeric(n)) %>%
+        mutate(significant=ifelse(adj.p<0.05,1,0))
+    }
+  }
+}
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+ 
+ 
+ var_index <- 77:236 # 160Sig
+  var_index <- 77:151 # imm
+  var_index <-  c(15:42,47:74)  # Immune lands
+  var_index <- 79:143 # SNV sig
+  
+  file=clinical %>%
+    filter(cancertype %in% c("COADREAD","STAD","UCSC"),Subtype=="MSS") 
+  var_index <- which(colnames(clinical) %in% c(immune_measures_mapping %>% filter(Cluster!="Mut. Signature") %>% .[,1] %>% as.character() %>% gsub(" ",".",.)))
+  file[,var_index] <- apply(file[,var_index],2,as.numeric)
+  
+  mutSig_var = immune_measures_mapping %>% filter(Cluster=="Mut. Signature") %>% .$Var1
+  mutSig_var = mutSig_var[-which(mutSig_var%in% c("SBS6","SBS21","SBS26"))] 
+  var_index <- which(colnames(clinical) %in% mutSig_var)
+  file[,var_index] <- apply(file[,var_index],2,as.numeric)
+
+
+  #file[,"cancertype"] <- as.character(file[,"cancertype"])
+  sig_idx_unit = which(colnames(clinical) %in% paste0("sig_",1:4))
+  colnames(file)[sig_idx_unit] = paste0("Signature ",1:length(sig_idx))
+  cor_table_unit <-  cor_facet(df=file,var_idx=var_index,sig_idx=sig_idx_unit ,facet="cancertype",heatmap=TRUE,empty_row_delete=TRUE,
+                              col_low="#377EB8",col_high="#E41A1C") 
+  cor_table_unit[[2]]
+  cor_table = cor_table_unit[[1]]
+  
+  sig_idx_prop = which(colnames(file) %in% paste0("Signature ",1:4)) 
+  file$`Signature 2`
+  colnames(file)[sig_idx_prop] = paste0("Signature ",1:length(sig_idx_prop))
+  cor_table_prop <- cor_facet(df=file,var_idx=var_index,sig_idx=sig_idx_prop,facet="cancertype",empty_row_delete=TRUE,heatmap=TRUE,col_low="#377EB8",col_high="#E41A1C") 
+  file[,var_index]
+  cor_table=cor_table_prop[[1]]
+  write.csv(cor_table,file="cor_table_unit_all_4146_20210501_mutSig.csv")
+
+  cor_table_prop[[2]] 
+  ### Broadview
+  colnames(immune_measures_mapping)[1] <- "Var1"
+  library(ggnewscale)
+  
+  max_r = max(abs(cor_table$r))
+  
+             
+  cor_table_plot = cor_table %>% 
+      mutate(r=replace(r,is.na(r),0),adj.p=replace(adj.p,is.na(adj.p)|is.nan(adj.p),1)) %>% # set correlation with na or p>0.05 invisible
+      mutate(r=round(r,2),Var2=as.character(Var2),label=paste0(group," \n (n=",n,")")) %>%
+      mutate(r_show=replace(r,adj.p>0.05,0))  %>% 
+      mutate(color=ifelse(abs(r_show)>0.2,"black","white")) %>%
+      left_join(immune_measures_mapping,by="Var1") %>%
+      left_join( cor_table %>% group_by(Var1,group) %>% dplyr::summarise(n_show=min(n)),by=c("Var1","group"))
+      # mutate(Var=factor(Var2,levels=c(paste0("Signature ",1:4)))) %>%
+  n_var1 <- length(unique(cor_table_plot$Var2))
+  cor_table_plot  %>% 
+      ggplot(aes(y=Full,x=Var2,fill=r_show)) +
+      geom_tile(color="white")+ 
+      new_scale_color()+ 
+      geom_text(data=subset(cor_table_plot,color=="black"),aes(y=Full,x=Var2,label=r_show,color=color),size=4)+
+      geom_text(aes(y=Full,x=n_var1+1,label=n_show),size=3,col="grey50")+
+      coord_cartesian( xlim=c(1,n_var1+0.7),clip = "off")+
+      scale_colour_manual(values=c("black"))+
+      scale_fill_gradientn(colours = colfun(seq(-0.5,0.5,length.out = 100)), limits=c(-max_r, max_r))+
+      #scale_fill_gradient2(low="#377EB8",mid="#ffffff",high="#E41A1C",midpoint = 0,name="Spearman Correlation")+
+      facet_grid(rows=vars(Cluster),cols=vars(group),scales = "free",space="free")+
+      theme_pubr(border = TRUE)+
+      theme(axis.text.x = element_text(angle=90,vjust=0.5),legend.position = "right",
+            strip.text.y = element_text(size=12,angle=0))+
+            labs(x="",y="")
+
+  folder_path=paste0("D:/Project/Work/Phd/20210401 Figure making/20210502_clean/")
+  if (!dir.exists(folder_path)) dir.create(folder_path)
+  i = colnames(file)[var_index[4]]
+  cancertypes_100samples = c("BLCA","BRCA","COADREAD","HNSC","GBM","KIRC","KIRP","LIHC","LUAD","LUSC","OV","PAAD","PRAD","STAD","SKCM","UCEC") 
+  
+  colfun = colorRamp2(c(-0.5, 0, .5), c("#377EB8", "white", "#E41A1C"))
+  colfun(seq(-0.5,0.5,length.out = 100))
+  cor_table = read.csv(file="cor_table_unit_all_4146_20210501_mutSig.csv")[,-1] %>% 
+    mutate(group=as.character(group))
+  cor_table = read.csv(file="cor_table_prop_all_4146_20210501_no_mutSig.csv")[,-1] %>% 
+    mutate(group=as.character(group),)
+  max_r = max(abs(cor_table$r))
+  i = "ADORA2A" 
+  glimpse(file)
+  glimpse(cor_table)
+  i = "SBS2"
+  for (i in colnames(file)[var_index]) {
+     n_type = length(unique(file[which(file[,i]>0),]$cancertype))
+     n_col_type = length(unique(subset(cor_table,Var1==i)$group))
+
+     #p_scatter=scatter_facet(df=file,var_idx=var_index,vb=sig_idx_prop,cor_table=cor_table,var=i,facet_name="cancertype",legend.position = "none",highlight_color="lightsalmon",log2_scale = TRUE,x_lab="ESig_count",shape_subtype=FALSE,compare_subtype = FALSE,side_boxplot = FALSE)
+     p_scatter=scatter_facet(df=file,var_idx=var_index,vb=sig_idx_unit,cor_table=cor_table,var=i,facet_name="cancertype",legend.position = "none",highlight_color="lightsalmon",log2_scale = TRUE,x_lab="ESig_count",shape_subtype=FALSE,compare_subtype = FALSE,side_boxplot = FALSE)
+     
+     if (n_col_type>0) {
+      cor_table_plot = cor_table %>% 
+        mutate(r=replace(r,is.na(r),0),adj.p=replace(adj.p,is.na(adj.p)|is.nan(adj.p),1)) %>% # set correlation with na or p>0.05 invisible
+        mutate(r=round(r,2),Var2=as.character(Var2),label=paste0(group," \n (n=",n,")")) %>%
+        mutate(r_show=replace(r,adj.p>0.05,0))  %>% 
+        mutate(color=ifelse(abs(r_show)>0.2,"black","white")) %>%
+        filter(Var1==i) %>%
+        left_join(immune_measures_mapping,by="Var1") 
+     # p_heatmap <- cor_table_plot  %>% 
+     #      mutate(Var2= as.character(Var2)) %>%
+     #      mutate(Var2=factor(Var2,levels=paste0("Signature ",4:1))) %>%
+     #      ggplot(aes(y=Var2,x=group,fill=r_show)) +
+     #      geom_tile(color="white")+ 
+     #      new_scale_color()+ 
+     #      geom_text(data=subset(cor_table_plot,color=="black"),aes(y=Var2,x=group,label=r_show,color=color),size=4,check_overlap = TRUE)+
+     #      scale_color_manual(values="black")+
+     #      scale_fill_gradientn(colours = colfun(seq(-0.5,0.5,length.out = 100)), limits=c(-max_r, max_r))+
+     #      # scale_fill_gradient2(low="#377EB8",mid="#ffffff",high="#E41A1C",midpoint = 0,name="Spearman Correlation")+
+     #      theme_pubr()+
+     #      theme(axis.text.x = element_text(angle=90,vjust=0.5),legend.position="none")
+     #            labs(title=i,x="",y="")
+     # 
+     # ggsave(p_heatmap,file=paste0(folder_path,i,"_heatmap_unit.pdf"),width = 2+n_col_type*0.4 ,height = 2.3)
+    }
+     ggsave(p_scatter+theme_pubr(),file=paste0(folder_path,i,"_scatter_prop_4000.pdf"),width = 0.48+n_type*2.08,height = 10)
+  }
+  
+
+   3### Wilcox test
+  colnames(immune_measures_mapping)[1] = "variable"
+  var_index = which(colnames(clinical) %in% c(immune_measures_mapping %>% .[,1] %>% as.character()))
+  df4= clinical[,c(var_index,which(colnames(clinical) %in% c("subtype","cancertype","samplename")))] %>%
+    melt(id=c("subtype","cancertype","samplename")) %>%
+    left_join(immune_measures_mapping,by="variable") %>%
+    mutate(subtype = as.character(subtype)) %>%
+    filter(subtype %in% c("ESig3","ESig4")) %>%
+    drop_na(value) %>%
+    mutate(value=as.numeric(value)) 
+
+  # get mean and direction
+  mean_subtype <- df4 %>%
+    group_by(variable,subtype,cancertype) %>%
+    dplyr::summarise(mean=mean(value,na.rm=TRUE)) %>%
+    dcast(variable+cancertype~subtype,measure.vars = "mean") %>%
+    mutate(direction=ifelse(ESig3>ESig4,-1,1),mean_diff=ESig3-ESig4)
+  
+ 
+  wilcox_table=ddply(df4, .(cancertype), .fun = function(x){
+    compare_means(value~subtype,x,group.by='variable',p.adjust.method = "BH")
+    }) %>%
+    left_join(mean_subtype,by=c("cancertype","variable")) %>%
+    #left_join(immune_measures_mapping,by="variable") %>%
+    mutate(logP_direction=(-log10(p.adj))*direction) %>%
+    mutate(direction=factor(direction,levels=c(-1,1),labels=c(expression("sig3" ^"HI"),expression("sig4" ^"HI")))) %>%
+    mutate(significant=ifelse(p.adj<0.05,1,0)) 
+    # arrange(desc(p.adj),direction,cancertype_new) %>%
+    # mutate(variable=factor(variable,levels=variable),color=ifelse(significant==1,"black","grey"))  
+  #plot Full
+  write.csv(wilcox_table,"20200502_prop_4000_wilcox_table.csv")
+  #wilcox_table = read.csv("C:/Users/yangx/University of Glasgow/Ke Yuan - GlasgowCancerEvolution/Tables/20200311_wilcox_table.csv")
+  p_wilcox <- wilcox_table %>% 
+    left_join(immune_measures_mapping,by="variable") %>%
+    ggbarplot(x="Full",y="logP_direction",rotate=TRUE,
+              fill="direction",
+              color="white",
+              ggtheme = theme_pubr(border=TRUE))+
+    facet_grid(cols=vars(cancertype),rows=vars(Cluster),space = "free_y",scales = "free")+
+    # facet_grid(cols=vars(cancertype),space = "free_y",scales = "free")+
+    theme(panel.grid.major.y = element_line(color="grey",linetype=1),
+          panel.grid.minor.y = element_line(color="grey",linetype=1),
+          axis.text.y = element_text(angle = 0, hjust = 1, colour = wilcox_table$color),
+          strip.text.y = element_text(size=12,angle = 0))+
+    geom_hline(yintercept=-log10(0.05),color="grey",size=0.5,linetype='dashed')+
+    geom_hline(yintercept=log10(0.05),color="grey",size=0.5,linetype='dashed')+
+    scale_fill_manual(values=c("#cc7368","#8c959b"),labels=c(expression("ESig3" ^"HI"),expression("ESig4" ^"HI"))) +
+    labs(y=expression("-Log"[10](PVal) %*% sign(change)),x="",fill=" ")
+  
+    cancertype = data.frame(unique(wilcox_table$cancertype))
+    
+    wilcox_table_plot = left_join( wilcox_table,immune_measures_mapping,by="variable") %>%
+      mutate(color=ifelse(significant==1,"black","grey"),
+             cancertype_new=cancertype)
+      
+    
+    ## Typewise together
+    p_wilcox = dlply(wilcox_table_plot, .(cancertype), .fun=function(x){ 
+      cancertype = unique(x$cancertype_new)
+      df = x %>%
+        arrange(desc(p.adj)) %>%
+        mutate(Full=factor(Full,levels=unique(.$Full)))
+      p = df %>%  
+        ggbarplot(x="Full",y="logP_direction",rotate=TRUE,
+                  fill="direction",
+                  color="white",
+                  ggtheme = theme_pubr(border=TRUE))+
+        theme(panel.grid.major.y = element_line(color="grey",linetype=1),
+              panel.grid.minor.y = element_line(color="grey",linetype=1),
+              axis.text.y = element_text(angle = 0, hjust = 1, colour = df$color),
+              strip.text.y = element_text(size=12,angle = 0))+
+        geom_hline(yintercept=-log10(0.05),color="grey",size=0.5,linetype='dashed')+
+        geom_hline(yintercept=log10(0.05),color="grey",size=0.5,linetype='dashed')+
+        scale_fill_manual(values=c("#cc7368","#8c959b"),labels=c(expression("ESig3" ^"HI"),expression("ESig4" ^"HI"))) +
+        labs(y=expression("-Log"[10](PVal) %*% sign(change)),x="",fill=" ",title=cancertype)
+      ggsave(p,file=paste0(cancertype,"_wilcox.pdf"),width=6,height=25)
+      p
+    })
+    do.call("grid.arrange",c(p_wilcox,nrow=1))
+```
+
+## Wilcox Plot
+```{r pressure, echo=FALSE}
+immune_measures_mapping = immune_measures_mapping %>%
+   mutate(variable=gsub(" ",".",variable))
+ clinical$Subtype
+  df4= clinical[,c(var_index,which(colnames(clinical) %in% c("subtype","cancertype","samplename","Subtype")))] %>%
+      filter(cancertype %in% c("COADREAD","STAD","UCEC")) %>%
+      melt(id=c("subtype","Subtype","cancertype","samplename")) %>%
+      left_join(immune_measures_mapping,by="variable") %>%
+      mutate(subtype = as.character(subtype)) %>%
+      filter(subtype %in% c("ESig3","ESig4")) %>%
+      tidyr::drop_na(value) %>%
+      mutate(value=as.numeric(value)) 
+
+  # get mean and direction
+  mean_subtype <- df4 %>%
+    group_by(variable,subtype,cancertype) %>%
+    dplyr::summarise(mean=mean(value,na.rm=TRUE)) %>%
+    dcast(variable+cancertype~subtype,measure.vars = "mean") %>%
+    mutate(direction=ifelse(ESig3>ESig4,-1,1),mean_diff=ESig3-ESig4)
+  
+ 
+  wilcox_table=ddply(df4, .(cancertype), .fun = function(x){
+    compare_means(value~subtype,x,group.by='variable',p.adjust.method = "BH")
+    }) %>%
+    left_join(mean_subtype,by=c("cancertype","variable")) %>%
+    #left_join(immune_measures_mapping,by="variable") %>%
+    mutate(logP_direction=(-log10(p.adj))*direction) %>%
+    mutate(direction=factor(direction,levels=c(-1,1),labels=c(expression("sig3" ^"HI"),expression("sig4" ^"HI")))) %>%
+    mutate(significant=ifelse(p.adj<0.05,1,0)) 
+    # arrange(desc(p.adj),direction,cancertype_new) %>%
+    # mutate(variable=factor(variable,levels=variable),color=ifelse(significant==1,"black","grey"))  
+  #plot Full
+  write.csv(wilcox_table,"20200502_prop_4000_wilcox_table.csv")
+  #wilcox_table = read.csv("C:/Users/yangx/University of Glasgow/Ke Yuan - GlasgowCancerEvolution/Tables/20200311_wilcox_table.csv")
+  p_wilcox <- wilcox_table %>% 
+    left_join(immune_measures_mapping,by="variable") %>%
+    ggbarplot(x="Full",y="logP_direction",rotate=TRUE,
+              fill="direction",
+              color="white",
+              ggtheme = theme_pubr(border=TRUE))+
+    facet_grid(cols=vars(cancertype),rows=vars(Cluster),space = "free_y",scales = "free")+
+    # facet_grid(cols=vars(cancertype),space = "free_y",scales = "free")+
+    theme(panel.grid.major.y = element_line(color="grey",linetype=1),
+          panel.grid.minor.y = element_line(color="grey",linetype=1),
+          axis.text.y = element_text(angle = 0, hjust = 1, colour = wilcox_table$color),
+          strip.text.y = element_text(size=12,angle = 0))+
+    geom_hline(yintercept=-log10(0.05),color="grey",size=0.5,linetype='dashed')+
+    geom_hline(yintercept=log10(0.05),color="grey",size=0.5,linetype='dashed')+
+    scale_fill_manual(values=c("#cc7368","#8c959b"),labels=c(expression("ESig3" ^"HI"),expression("ESig4" ^"HI"))) +
+    labs(y=expression("-Log"[10](PVal) %*% sign(change)),x="",fill=" ")
+  
+    cancertype = data.frame(unique(wilcox_table$cancertype))
+    
+    wilcox_table_plot = left_join( wilcox_table,immune_measures_mapping,by="variable") %>%
+      mutate(color=ifelse(significant==1,"black","grey"),
+             cancertype_new=cancertype)
+      
+    
+    ## Typewise together
+    p_wilcox = dlply(wilcox_table_plot, .(cancertype), .fun=function(x){ 
+      cancertype = unique(x$cancertype_new)
+      df = x %>%
+        arrange(desc(p.adj)) %>%
+        mutate(Full=factor(Full,levels=unique(.$Full)))
+      p = df %>%  
+        ggbarplot(x="Full",y="logP_direction",rotate=TRUE,
+                  fill="direction",
+                  color="white",
+                  ggtheme = theme_pubr(border=TRUE))+
+        theme(panel.grid.major.y = element_line(color="grey",linetype=1),
+              panel.grid.minor.y = element_line(color="grey",linetype=1),
+              axis.text.y = element_text(angle = 0, hjust = 1, colour = df$color),
+              strip.text.y = element_text(size=12,angle = 0))+
+        geom_hline(yintercept=-log10(0.05),color="grey",size=0.5,linetype='dashed')+
+        geom_hline(yintercept=log10(0.05),color="grey",size=0.5,linetype='dashed')+
+        scale_fill_manual(values=c("#cc7368","#8c959b"),labels=c(expression("ESig3" ^"HI"),expression("ESig4" ^"HI"))) +
+        labs(y=expression("-Log"[10](PVal) %*% sign(change)),x="",fill=" ",title=cancertype)
+      ggsave(p,file=paste0(cancertype,"_wilcox.pdf"),width=6,height=25)
+      p
+    })
+    library(gridExtra)
+    do.call("grid.arrange",c(p_wilcox,nrow=1))
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+non_linear = read.csv(file="non_linear_samplelist_z.csv") %>%
+  left_join(clinical,by=c("Name"="samplename")) %>%
+  filter(Type%in% c("non_linear","hignlight_non_linear"))
+
+non_linear$TCGA.Subtype
+non_linear$Subtype
+```
