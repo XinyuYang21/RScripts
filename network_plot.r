@@ -57,8 +57,8 @@ ggraph_plot = function(nodes,edges,facet=FALSE,title="",fill=FALSE,zoom=NA,p_val
   names(pathway_col_values) = pathway_col$Pathway
   
   gene_edges = edges %>% filter(gene1 %in% nodes$label,gene2 %in% nodes$label) 
-  from_id = sapply( edges$gene1,function(x) nodes %>% filter(label==x) %>% .$id ) %>% as.numeric()
-  to_id = sapply( edges$gene2,function(x) nodes %>% filter(label==x) %>% .$id ) %>% as.numeric()
+  from_id = sapply( gene_edges$gene1,function(x) nodes %>% filter(label==x) %>% .$id ) %>% as.numeric()
+  to_id = sapply( gene_edges$gene2,function(x) nodes %>% filter(label==x) %>% .$id ) %>% as.numeric()
   
   ### get layout
   edges <- data.frame(from = from_id, to = to_id,
@@ -71,12 +71,12 @@ ggraph_plot = function(nodes,edges,facet=FALSE,title="",fill=FALSE,zoom=NA,p_val
   if (length(co_nodes)>0) {
    nodes_co = nodes %>% filter(label %in% co_nodes) 
    edges_co = edges %>% filter(Event=="Co_Occurence",gene1 %in% co_nodes, gene2 %in% co_nodes)
-   nodes_mu = nodes %>% filter(label %in% mu_nodes) 
+   nodes_mu = nodes %>% filter(label %in% mu_nodes | freq==1) 
    edges_mu = edges %>% filter(Event=="Mutually_Exclusive",gene1 %in% mu_nodes , gene2 %in% mu_nodes)
    net_co = graph_from_data_frame(d=edges_co, vertices=nodes_co, directed=F) 
   # Merge group of co-occurrence nodes label to whole nodes 
   } else {
-    nodes_mu = nodes %>% filter(label %in% mu_nodes) 
+    nodes_mu = nodes %>% filter(label %in% mu_nodes| freq==1) 
     edges_mu = edges %>% filter(Event=="Mutually_Exclusive",gene1 %in% mu_nodes , gene2 %in% mu_nodes)
     net_co = graph_from_data_frame(d=edges_mu, vertices=nodes_mu, directed=F) 
   }
@@ -90,7 +90,7 @@ ggraph_plot = function(nodes,edges,facet=FALSE,title="",fill=FALSE,zoom=NA,p_val
   if (no_layout) l = net_to_layout(net,gene_nodes,simple=TRUE) else
     l = net_to_layout(net,gene_nodes)
   
-  v.size <- V(tg)$freq_value %>% as.character() %>% as.numeric() %>% rescale(c(15,30))
+  v.size <- V(tg)$freq_value %>% as.character() %>% as.numeric() 
   e.color <- E(tg)$color
   E(tg)$weight <- E(tg)$log10pval %>% rescale(c(0.5,2.5))
   eigenCent <- evcent(tg)$vector
@@ -169,13 +169,14 @@ mafToNodeEdges <- function(maf,ccf_filter,ksByCancer,pathway=FALSE,top_gene,p_va
       left_join( pathway_col,by="Pathway")
     
     geneccfFreq <- ccf_filter %>%
+      filter(samplename %in% clinicalTemp$Tumor_Sample_Barcode) %>%
       mutate(ccube_ccf= ifelse(ccube_ccf>=1,1,ccube_ccf))%>%
       filter(Variant_Classification %nin%  c('Translation_Start_Site'),
-             Hugo_Symbol %in% ksByCancer$Gene) %>%
+             Hugo_Symbol %in% c(ksByCancer$Gene,"POLE")) %>%
       inner_join(oncoPath, by=c("Hugo_Symbol"="Gene")) %>%
       group_by(Pathway) %>%
       dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename))) %>% 
-      mutate(freq=n/nrow(manSelect)) %>%
+      mutate(freq=n/nrow(clinicalTemp)) %>%
       mutate(freq_value=cut(.$freq,breaks=c(seq(0,1,length.out=10)),labels=seq(15,50,length.out=9)))
     colnames(geneccfFreq)[1] = "label"
     
@@ -204,26 +205,29 @@ mafToNodeEdges <- function(maf,ccf_filter,ksByCancer,pathway=FALSE,top_gene,p_va
                sortByAnnotation = TRUE, keepGeneOrder = FALSE, bgCol="#F5F5F5")
       }
     )
+    geneccfFreq <- ccf_filter %>%
+      filter(samplename %in% clinicalTemp$Tumor_Sample_Barcode) %>%
+      mutate(ccube_ccf= ifelse(ccube_ccf>=1,1,ccube_ccf))%>%
+      filter(Variant_Classification %nin%  c('Translation_Start_Site'),
+             Hugo_Symbol %in% c(ksByCancer$Gene,"POLE"),
+             samplename %in% clinicalTemp$Tumor_Sample_Barcode) %>%
+      group_by(Hugo_Symbol) %>%
+      dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename))) %>% 
+      mutate(freq=n/nrow(clinicalTemp)) %>%
+      mutate(freq_value=cut(.$freq,breaks=c(seq(0,1,length.out=10)),labels=seq(15,31,by=2))) %>%
+      arrange(desc(freq))
+    colnames(geneccfFreq)[1] = "label"
     
     res <- getInteractions(maf, top=top_gene, colPal = "PRGn", returnAll = TRUE, sigSymbolsSize=1.5) 
     p_interheatmap = interaction_heatmap(res)
     gene_edges = res$pairs %>% filter(pValue<p_value) 
-    gene_nodes = cbind(gene_edges$gene1,gene_edges$gene2) %>% t(.) %>% as.character() %>%unique(.)
+    gene_nodes = cbind(gene_edges$gene1,gene_edges$gene2) %>% t(.) %>% as.character() %>% c(.,"APC","TP53","POLE","KRAS","BRAF","PIK3CA","FBXW7") %>% unique(.)
     gene_nodes_col = data.frame(Gene=gene_nodes) %>%  
       left_join(oncoPath, by="Gene") %>%
       left_join( pathway_col,by="Pathway") %>%
       distinct(Gene,.keep_all = TRUE)
    
-    geneccfFreq <- ccf_filter %>%
-      mutate(ccube_ccf= ifelse(ccube_ccf>=1,1,ccube_ccf))%>%
-      filter(Variant_Classification %nin%  c('Translation_Start_Site'),
-             Hugo_Symbol %in% ksByCancer$Gene,
-             samplename %in% clinicalTemp$Tumor_Sample_Barcode) %>%
-      group_by(Hugo_Symbol) %>%
-      dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename))) %>% 
-      mutate(freq=n/nrow(manSelect)) %>%
-      mutate(freq_value=cut(.$freq,breaks=c(seq(0,1,length.out=10)),labels=seq(15,31,by=2)))
-    colnames(geneccfFreq)[1] = "label"
+   
   }
   
   if (length(gene_nodes)>0) {
@@ -377,7 +381,7 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
   ksByCancer = read.csv(ks_path) %>%
     filter(cancertype %in% paste0(sort(typesMaf),collapse  = "")) %>% 
     filter(significant_ks == 1)
-  
+
   #load ccf files
   for (j in 1:length(ccf_path) ) {
     if (j==1) ccf_all= get(load(paste0(folder_path,"Figures and Data/CCF/",ccf_path[1]))) else 
@@ -397,7 +401,8 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
   }
   
   ### Load selected gene ccf file
-  geneCounts <- ksByCancer %>% count(Gene, sort = TRUE, name = "n_genes_across_cancertype")
+  geneCounts <- ksByCancer %>% count(Gene, sort = TRUE, name = "n_genes_across_cancertype") %>%
+    rbind(c("POLE",1))
   
   mergeMaf<- merge_mafs(lstObject)
   mergeMaf@data$Tumor_Sample_Barcode = substr(as.character(mergeMaf@data$Tumor_Sample_Barcode),1,12)
@@ -429,7 +434,7 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
   
   NodeEdges4MSS=mafToNodeEdges(mafEsig4MSS,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
   NodeEdges4MMR=mafToNodeEdges(mafEsig4MMR,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges4POLE=mafToNodeEdges(mafEsig4POLE,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
+  NodeEdges4POLE=mafToNodeEdges(maf=mafEsig4POLE,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
   NodeEdges3MSS=mafToNodeEdges(mafEsig3MSS,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
   NodeEdges3MMR=mafToNodeEdges(mafEsig3MMR,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
   NodeEdges3POLE=mafToNodeEdges(maf=mafEsig3POLE,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
@@ -519,7 +524,7 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
   popViewport()
   
   
-  caption=paste0("Top ",top_gene," genes with significant ccf transition. \n Edge width represents the strength of p value, only edges with p>",p_value," were shown. \n Circle size represent population frequency of each gene.")
+  caption=paste0("Top ",top_gene," genes with significant ccf transition. \n Edge width represents the strength of p value, only edges with p<",p_value," were shown. \n Circle size represent population frequency of each gene.")
   #subtitle = 
   
   g2 <- grid.grab(wrap.grobs = TRUE) %>% as.ggplot() +

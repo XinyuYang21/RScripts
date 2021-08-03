@@ -64,8 +64,8 @@ editor_options:
   types = c("COADREAD","UCEC","STAD")
  
 
-  i = "COADREAD"
-   types = "COADREAD"
+  i = "UCEC"
+   types = "UCEC"
   for (i in types) {
     
     if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
@@ -100,7 +100,7 @@ editor_options:
     scales::show_col(Tscore)
     names(Subtype_colors ) <- c("POLE","MSS","MMR")
     names(Escape_colors) = c("AI","HLA_LOH","CHECKPOINT","CHECKPOINT_&_LOH","COMBINATION","NONE")
-    names(Tscore) = c("low","medium","high")
+    names(Tscore) = c("high","low","medium")
     names(c_neo) = c("0-10","10-50","50-100","100-500","500-1000")
 
   
