@@ -137,7 +137,7 @@ scatter_facet <- function(var,df,vb,var_idx,facet_name="cancertype",cor_table,la
   if (xmin>=0) df_new = df_new %>% filter(value>0)
   if (ymin>=0) df_new = df_new %>% filter(Var>0)
  
-  p1 <-   df_new %>% scatter_plot_function()
+  p1 <-  df_new %>% scatter_plot_function()
   
   if (log2_scale) p1 = p1+labs(y=paste0("log2(",var,")"),x=paste0("log2(",x_lab,")"))
   # if (all(df_new$Var>=0) & log2_scale) p1 <- p1+scale_y_continuous(trans='sqrt',breaks=trans_breaks("sqrt",function(x) x^2),labels=trans_format("sqrt",function(x) x^2))

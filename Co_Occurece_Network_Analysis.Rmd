@@ -9,7 +9,7 @@ editor_options:
   library(TCGAmutations)
   library(tidyverse)
   library(maftools)
-  devtools::install_github("ShixiangWang/maftools")
+  #devtools::install_github("ShixiangWang/maftools")
 
   library(ComplexHeatmap)
   library(TCGAmutations)
@@ -44,96 +44,106 @@ editor_options:
   library(ggplotify)
   #delete dplyr - #count
 
-  folder_path = "C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/"
+  folder_path = "C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Figures and Data/" # nolint
 
-  source(paste0(folder_path,'Figures and Data/RScripts/oncomatrix.R'))
-  source(paste0(folder_path,'Figures and Data/RScripts/getInteractions.R'))
-  source(paste0(folder_path,'Figures and Data/RScripts/network_plot.R'))
+  source(paste0(folder_path,"RScripts/oncomatrix.R"))
+  source(paste0(folder_path,"RScripts/getInteractions.R"))
+  source(paste0(folder_path,"RScripts/network_plot.R"))
 ```
 
 ## Run 
 
 ```{r cars}
 
-  Esig_path = paste0(folder_path,"Figures and Data/ESigs_integrated_measure_4146_20210501.csv")
-  ks_path = paste0(folder_path,"Figures and Data/CCF_transition/gene_ks_fisher_table_4000_20210502.csv")
-  oncoPath <-  read.csv(paste0(folder_path,"Figures and Data/Oncogenic_pathways.csv"))
-  dir_all = dir(paste0(folder_path,"Figures and Data/CCF/"))
+  Esig_path <- paste0(folder_path,"ESigs_integrated_measure_4146_20210501.csv")
+  ks_path = paste0(folder_path,"CCF_transition/gene_ks_fisher_table_4000_20210502.csv")
+  oncoPath <-  read.csv(paste0(folder_path,"Oncogenic_pathways.csv"))
+  dir_all = dir(paste0(folder_path,"CCF/"))
+  
+  { # Oncoplot Annotation Color
+      Subtype_colors <- c("#0072B5","#E18727","#20854E") #colorRampPalette(pal_nejm("default", alpha = 1)(8))(8)[2:4]
+      names(Subtype_colors ) <- c("POLE","MSS","MMR")
+    
+      Escape_colors <- c("#0073C2","#D1B618","#B26661","#A37C94","springgreen3","grey40") #colorRampPalette(pal_jco("default", alpha = 1)(8))(9)[c(1,2,4:5)]
+      names(Escape_colors) = c("AI","HLA_LOH","CHECKPOINT","CHECKPOINT_&_LOH","COMBINATION","NONE")
+
+      Tscore <- c("#E64B35FF","#4DBBD5FF","lightpink") # c(pal_npg(palette = c("nrc"), alpha = 1)(2),"lightpink")
+      names(Tscore) = c("high","low","medium")
+      c_neo <- c("#FEEDDE","#FDBE85","#FD8D3C","#E6550D","#A63603") #RColorBrewer::brewer.pal(name="Oranges",n=5)
+      names(c_neo) = c("0-10","10-50","50-100","100-500","500-1000")
+    
+      fabcolors <- list(Subtype = Subtype_colors,Escape=Escape_colors,Tcell_score=Tscore,Clonal_neoantigen_cat=c_neo)
+  }
+  
+  Gistic <- read.delim("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes")
+  
   
   types= unique(man$cancertype)
   types = c("COADREAD","UCEC","STAD")
  
+   i <- "COADREAD"
+   types <- "COADREAD"
 
-  i = "UCEC"
-   types = "UCEC"
   for (i in types) {
-    
     if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
-    
-    # gene_filter <- read.csv(file=ks_path) %>%
-    #   filter(cancertype %in% paste0(sort(i),collapse  = "")) %>% 
-    #   filter(significant_ks == 1)
-    
-    # get ccf file for filtered samples
-    ccf_path = dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))]
 
-    manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i,subtype %in% c("ESig3","ESig4"))  %>%
+    ccf_path = paste0(folder_path,"/CCF/",dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])
+
+    manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i) 
+
+    gistic <- Gistic %>%
+      melt(id=colnames(.)[1]) %>%
+      filter(value %in% c(-2,2)) %>%
+      mutate(value=factor(value,levels=c(-2,2),labels=c("homdel","hamp")),variable=gsub("[.]","-",substr(variable,1,12))) %>%
+      mutate(value=as.character(value)) %>%
+      dcast(Gene.Symbol~variable,value.var = "value") 
+    
+    gistic_path = paste0(folder_path,"/CNV/",i,"_gistic_mat.csv")
+    write.csv(gistic,file=gistic_path)
+  }
+  
+  for (i in types) {
+    if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
+
+    ccf_path = paste0(folder_path,"/CCF/",dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])
+
+    manSelect <- read.csv(Esig_path) %>% 
+      filter(cancertype ==i,subtype %in% c("ESig3","ESig4"))  %>%
       mutate(Clonal_neoantigen_cat=cut(.$Clonal_neoantigen,breaks=c(0,10,50,100,500,1000),labels=c("0-10","10-50","50-100","100-500","500-1000")))
-    #manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i,Subtype !="MSS") 
+    
+    gistic <- Gistic %>%
+      melt(id=colnames(.)[1]) %>%
+      filter(value %in% c(-2,2)) %>%
+      mutate(value=factor(value,levels=c(-2,2),labels=c("homdel","hamp")),variable=gsub("[.]","-",substr(variable,1,12))) %>%
+      mutate(value=as.character(value)) %>%
+      dcast(Gene.Symbol~variable,value.var = "value") 
     # Set top genes for co-occurrence analsysis, ccf types as the x axis and maximum p value filtered as network
-    top_gene=30;ccf_type="median_ccf";p_value=0.05
-    # top_gene=50;ccf_type="median_ccf";p_value=0.05
-    # top_gene=30;ccf_type="median_ccf";p_value=0.01
-    # top_gene=50;ccf_type="mean_ccf";p_value=0.01
-    # top_gene=50;ccf_type="mean_ccf";p_value=0.05
-    # top_gene=30;ccf_type="mean_ccf";p_value=0.05
-    # top_gene=30;ccf_type="mean_ccf";p_value=0.01
-    if (i %in% c("COADREAD","STAD","UCEC"))  oncoplot.feature=c("Subtype","Escape","Tcell_score","Clonal_neoantigen_cat") else
-      oncoplot.feature=NA
-    
-    Subtype_colors <- colorRampPalette(pal_nejm("default", alpha = 1)(8))(8)[2:4]
-    Escape_colors <- c(colorRampPalette(pal_jco("default", alpha = 1)(8))(9)[c(1,2,4:5)],"springgreen3","grey40")
-    Tscore <- c(pal_npg(palette = c("nrc"), alpha = 1)(2),"lightpink")
-    c_neo <- RColorBrewer::brewer.pal(name="Oranges",n=5)
-   
-    scales::show_col(Escape_colors)
-    scales::show_col(Tscore)
-    names(Subtype_colors ) <- c("POLE","MSS","MMR")
-    names(Escape_colors) = c("AI","HLA_LOH","CHECKPOINT","CHECKPOINT_&_LOH","COMBINATION","NONE")
-    names(Tscore) = c("high","low","medium")
-    names(c_neo) = c("0-10","10-50","50-100","100-500","500-1000")
+    top_gene=30;ccf_type="median_ccf";p_value=0.05  # top_gene=50;ccf_type="mean_ccf";p_value=0.01
 
-  
-    fabcolors <- list(Subtype = Subtype_colors,Escape=Escape_colors,Tcell_score=Tscore,Clonal_neoantigen_cat=c_neo)
-  
-    
     output_folder = paste0(folder_path,"Figures and Data/Concurrence_network_",Sys.Date(),"/")
     if (!dir.exists(output_folder)) dir.create(output_folder)
     output=paste0(output_folder,i,"_ESig3,4_",top_gene,"genes_",ccf_type,"_",nrow(manSelect),"_samples_",p_value,".pdf")
     
+
+    if (i %in% c("COADREAD","STAD","UCEC"))  {
+      oncoplot.feature=c("Subtype","Escape","Tcell_score","Clonal_neoantigen_cat")
+      oncoplot.feature=c("Subtype","Escape","Tcell_score","Clonal_neoantigen_cat","BLS.altered","POLE.altered","MSI")
+      manSelect
+    } else {
+      Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath)
+    }
+    
+
+   
     Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature,oncoplot.feature.col=fabcolors)
+    
     
   }
 
   
       # Trevor.Graham.et.al <- read.delim("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Trevor Graham et al.txt")
     # colnames(  Trevor.Graham.et.al)[1] = "samplename"
-  install.packages('alluvial')
-  library(alluvial)
-  library(reshape2)
-  grid.newpage()
-  data.grame(subtype=c("MMR","MSS","POLE"))
-  
-  ccf_all %>%
-    filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
-    mutate(Matched_Norm_Sample_Barcode=substr(Matched_Norm_Sample_Barcode,1,12)) %>%
-    left_join(oncoPath,by=c("Hugo_Symbol"="Gene")) %>%
-    left_join(manSelect[,c("samplename","Subtype")],by=c("Matched_Norm_Sample_Barcode"="samplename")) %>%
-    select(Matched_Norm_Sample_Barcode,Pathway,Hugo_Symbol,ccube_ccf,Subtype) %>%
-    mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) 
-  
-   data.grame(subtype=c("MMR","MSS","POLE"),
-              RTK_RAS=)
+
   
   
 ```

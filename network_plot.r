@@ -1,5 +1,4 @@
 # Multi-layer network
-
 mypal <- colorRampPalette(pal_nejm("default", alpha = 1)(8))(18)
 pathway_col = data.frame(Pathway=c("Cell_Cycle", "Chromatin_modifiers", "Notch", "NRF2", "PI3K", "RTK_RAS", "TGF-Beta", "TP53", "WNT", "Hippo", "Myc",NA), col=c(mypal[1:11],"grey70"))
 
@@ -52,74 +51,70 @@ ggraph_plot = function(nodes,edges,facet=FALSE,title="",fill=FALSE,zoom=NA,p_val
   
   mypal <- colorRampPalette(pal_nejm("default", alpha = 0.8)(8))(18)
   #scales::show_col(mypal)
-  pathway_col = data.frame(Pathway=c("Cell_Cycle", "Chromatin_modifiers", "Notch", "NRF2", "PI3K", "RTK_RAS", "TGF-Beta", "TP53", "WNT", "Hippo", "Myc",NA), col=c(mypal[c(1:8,10,15:16)],"grey70"))
-  pathway_col_values=pathway_col$col
+  pathway_col <- data.frame(Pathway=c("Cell_Cycle", "Chromatin_modifiers", "Notch", "NRF2", "PI3K", "RTK_RAS", "TGF-Beta", "TP53", "WNT", "Hippo", "Myc",NA), col=c(mypal[c(1:8,10,15:16)],"grey70"))
+  pathway_col_values <- pathway_col$col
   names(pathway_col_values) = pathway_col$Pathway
   
-  gene_edges = edges %>% filter(gene1 %in% nodes$label,gene2 %in% nodes$label) 
-  from_id = sapply( gene_edges$gene1,function(x) nodes %>% filter(label==x) %>% .$id ) %>% as.numeric()
-  to_id = sapply( gene_edges$gene2,function(x) nodes %>% filter(label==x) %>% .$id ) %>% as.numeric()
+  gene_edges <- edges %>% filter(gene1 %in% nodes$label,gene2 %in% nodes$label) 
+  from_id <- sapply( gene_edges$gene1,function(x) nodes %>% filter(label==x) %>% .$id ) %>% as.numeric()
+  to_id <- sapply( gene_edges$gene2,function(x) nodes %>% filter(label==x) %>% .$id ) %>% as.numeric()
   
   ### get layout
   edges <- data.frame(from = from_id, to = to_id,
-                      color = ifelse( gene_edges$Event =="Co_Occurence", "#4058a3",  "#f18826")) %>% cbind(gene_edges) 
+                      color = ifelse( gene_edges$Event == "Co_Occurence", "#4058a3",  "#f18826")) %>% cbind(gene_edges) 
   
-  co_nodes = c(t(edges[which(edges$Event=="Co_Occurence"),c("gene1","gene2")]))  %>% unique(.)
-  mu_nodes = c(t(edges[which(edges$Event=="Mutually_Exclusive"),c("gene1","gene2")]))  %>% unique(.)
-  
+  co_nodes <- c(t(edges[which(edges$Event == "Co_Occurence"), c("gene1","gene2")]))  %>% unique(.)
+  mu_nodes <- c(t(edges[which(edges$Event == "Mutually_Exclusive"), c("gene1","gene2")]))  %>% unique(.)
   #nodes_mu = nodes %>% filter(label %in% mu_nodes) 
   if (length(co_nodes)>0) {
-   nodes_co = nodes %>% filter(label %in% co_nodes) 
-   edges_co = edges %>% filter(Event=="Co_Occurence",gene1 %in% co_nodes, gene2 %in% co_nodes)
-   nodes_mu = nodes %>% filter(label %in% mu_nodes | freq==1) 
-   edges_mu = edges %>% filter(Event=="Mutually_Exclusive",gene1 %in% mu_nodes , gene2 %in% mu_nodes)
-   net_co = graph_from_data_frame(d=edges_co, vertices=nodes_co, directed=F) 
-  # Merge group of co-occurrence nodes label to whole nodes 
+   nodes_co <- nodes %>% filter(label %in% co_nodes)
+   edges_co <- edges %>% filter(Event == "Co_Occurence", gene1 %in% co_nodes, gene2 %in% co_nodes)
+   nodes_mu <- nodes %>% filter(label %in% mu_nodes | freq==1) 
+   edges_mu <- edges %>% filter(Event == "Mutually_Exclusive",gene1 %in% mu_nodes , gene2 %in% mu_nodes)
+   net_co <- graph_from_data_frame(d = edges_co, vertices = nodes_co, directed = F) 
+  # Merge group of co-occurrence nodes label to whole nodes
   } else {
-    nodes_mu = nodes %>% filter(label %in% mu_nodes| freq==1) 
-    edges_mu = edges %>% filter(Event=="Mutually_Exclusive",gene1 %in% mu_nodes , gene2 %in% mu_nodes)
-    net_co = graph_from_data_frame(d=edges_mu, vertices=nodes_mu, directed=F) 
+    nodes_mu <- nodes %>% filter(label %in% mu_nodes| freq==1) 
+    edges_mu <- edges %>% filter(Event=="Mutually_Exclusive", gene1 %in% mu_nodes , gene2 %in% mu_nodes) # nolint
+    net_co <- graph_from_data_frame(d=edges_mu, vertices=nodes_mu, directed=F)
   }
   # Calculate groups for nodes with co-occurrences relationship
-  tg_co <- tidygraph::as_tbl_graph(net_co) %>% activate(nodes) %>% mutate(label=label,name=as.numeric(name)) %>% mutate(community_id = group_components()) 
+  tg_co <- tidygraph::as_tbl_graph(net_co) %>% activate(nodes) %>% mutate(label = label, name = as.numeric(name), community_id = group_components())
   gene_nodes = left_join(nodes,data.frame(label=V(tg_co)$label,community_id=V(tg_co)$community_id),by="label") %>%
     mutate(community_id=as.factor(ifelse(is.na(community_id),0,community_id)))
-  net= graph_from_data_frame(d=edges,vertices=gene_nodes, directed=F)  
-  
+  net = graph_from_data_frame(d = edges, vertices = gene_nodes, directed = F)
+
   tg <- tidygraph::as_tbl_graph(net) %>% activate(nodes) %>% mutate(label=label)
   if (no_layout) l = net_to_layout(net,gene_nodes,simple=TRUE) else
     l = net_to_layout(net,gene_nodes)
-  
-  v.size <- V(tg)$freq_value %>% as.character() %>% as.numeric() 
+
+  v.size <- V(tg)$freq_value %>% as.character() %>% as.numeric()
   e.color <- E(tg)$color
   E(tg)$weight <- E(tg)$log10pval %>% rescale(c(0.5,2.5))
   eigenCent <- evcent(tg)$vector
   bins <- unique(quantile(eigenCent, seq(0,1,length.out=30)))
 
-  
-  p = tg %>%
-    ggraph(layout=l)
-    
-  if (nrow(nodes_co)>0) p = p+geom_edge_link0(aes(filter=(Event=="Co_Occurence")),edge_colour="#4058a3",width=E(tg)$weight[which(E(tg)$Event=="Co_Occurence")]) 
-  if (nrow(nodes_mu)>0) p = p+ geom_edge_link0(aes(filter=(Event=="Mutually_Exclusive")),edge_colour="#f18826",width=E(tg)$weight[which(E(tg)$Event=="Mutually_Exclusive")])
-  
-  p = p +
-    geom_node_point(aes(color=group),size=v.size/2,alpha = 0.9) +
+  p <- ggraph(tg, layout = l)
+  if (nrow(nodes_co)>0) p = p + geom_edge_link0(aes(filter = (Event=="Co_Occurence")),edge_colour = "#4058a3",width = E(tg)$weight[which(E(tg)$Event == "Co_Occurence")]) 
+  if (nrow(nodes_mu)>0) p = p + geom_edge_link0(aes(filter = (Event=="Mutually_Exclusive")),edge_colour = "#f18826",width = E(tg)$weight[which(E(tg)$Event == "Mutually_Exclusive")])
+
+  p <- p +
+    geom_node_point(aes(color = group), size = v.size/2, alpha = 0.9) +
     ggtitle(title)+
-    scale_color_manual(values=pathway_col_values)+
+    scale_color_manual(values = pathway_col_values)+
     #geom_node_point(aes(size=as.numeric(as.character(freq_value))),alpha = 0.9) +
     #guides(shape = guide_legend(override.aes = list(size = 15:23)))+
     geom_node_text(aes(label = label), #repel = TRUE,
-                   size=log(v.size),colour='black')+
-    theme_classic()+
-    scale_x_reverse()+
-    labs(x=ccf_type,y="",subtitle=subtitle)+
+                   size = log(v.size),colour = "black")+
+    theme_classic() +
+    scale_x_reverse() +
+    labs(x=ccf_type,y = "", subtitle = subtitle) +
     theme(axis.line.y = element_blank(),
           axis.ticks.y = element_blank(),
-          axis.text.y =element_blank(),
+          axis.text.y = element_blank(),
           legend.position = "none")
   
-  if (fill) {p = p+   
+  if (fill) {p <- p +
     ggforce::geom_mark_hull(aes(filter=community_id!=0,x=x,y=y,fill = as.factor(community_id),label = paste0("trajectory ", community_id)),
                             colour = NA,con.colour = "grey",show.legend = FALSE,concavity = 4,
                             expand = unit(3, "mm"),alpha = 0.1)
@@ -131,130 +126,95 @@ ggraph_plot = function(nodes,edges,facet=FALSE,title="",fill=FALSE,zoom=NA,p_val
   }
   p
 }
-mafToNodeEdges <- function(maf,ccf_filter,ksByCancer,pathway=FALSE,top_gene,p_value=0.05,oncoplot.feature=NA,fabcolors) {
-  
-  if (pathway) {
-    mafTemp   <- maf@data
-    mafTemp <- inner_join(mafTemp, oncoPath, by = c("Hugo_Symbol"="Gene"))
-    colnames(mafTemp)[1] <- "Hugo_Symbol_Gene"
-    colnames(mafTemp)[which(colnames(mafTemp)=="Pathway")] <- "Hugo_Symbol"
-    
-    clinicalTemp <- getSampleSummary(x = maf) 
-    clinicalTemp <- left_join(clinicalTemp, manSelect, by = c("Tumor_Sample_Barcode"="samplename")) %>%
-      distinct(Tumor_Sample_Barcode,.keep_all = TRUE)
-    mafClinical = read.maf(maf = mafTemp, clinicalData = clinicalTemp)
-    
-    annotationDat = clinicalTemp %>%
-      mutate(Tumor_Sample_Barcode = levels(mafClinical@data[["Tumor_Sample_Barcode"]]))
 
-    p_oncoplot = as.ggplot(function()
-      if (all(!is.na(oncoplot.feature))) {
-        oncoplot(maf = mafClinical, top=top_gene, removeNonMutated = FALSE, #colors = mycolors, 
-                 drawRowBar = TRUE,
-                 annotationColor=fabcolors,
-                 sortByAnnotation = TRUE, keepGeneOrder = FALSE, bgCol="#F5F5F5",
-                 clinicalFeatures=oncoplot.feature)
-      } else {
-        oncoplot(maf = mafClinical, top=top_gene, removeNonMutated = FALSE, #colors = mycolors, 
-                 drawRowBar = TRUE,
-                 sortByAnnotation = TRUE, keepGeneOrder = FALSE, bgCol="#F5F5F5")
-      }
-    )
+mafToNodeEdges <- function(maf,ccf_filter,ksByCancer,pathway=FALSE,top_gene,oncoplot.feature=NA,fabcolors=NA,oncoPath) {
+
+  mafTemp   <- maf@data
+  clinicalTemp <- getSampleSummary(x = maf) %>%
+    left_join(manSelect, by = c("Tumor_Sample_Barcode"="samplename")) %>%
+    distinct(Tumor_Sample_Barcode,.keep_all = TRUE)
+  # Calculate Sample frequency
+  geneccfFreq <- data.table(ccf_filter)[,ccube_ccf:=ifelse(ccube_ccf>=1,1,ccube_ccf)] %>%
+      .[samplename %in% clinicalTemp$Tumor_Sample_Barcode & Variant_Classification %nin%  c('Translation_Start_Site') &Hugo_Symbol %in% c(ksByCancer$Gene,"POLE")] %>%
+      inner_join(oncoPath, by=c("Hugo_Symbol"="Gene")) 
+ 
+  if (pathway) {
+    mafTemp <- inner_join(mafTemp, oncoPath, by = c("Hugo_Symbol"="Gene"))
+    colnames(mafTemp)[c(1,which(colnames(mafTemp)=="Pathway"))] <- c("Hugo_Symbol_Gene","Hugo_Symbol")
     
+    mafClinical = read.maf(maf = mafTemp, clinicalData = clinicalTemp,cnTable = )
     res <- getInteractions(mafClinical, top=10, colPal = "PRGn", returnAll = TRUE, sigSymbolsSize=1.5)
-    p_interheatmap = interaction_heatmap(res)
-    gene_edges = res$pairs %>% filter(pValue<p_value) 
-    gene_nodes = cbind(res$pairs$gene1,res$pairs$gene2) %>% t(.) %>% as.character() %>%unique(.)
-    gene_nodes_col = data.frame(Pathway=gene_nodes) %>%  
-      left_join( pathway_col,by="Pathway")
     
-    geneccfFreq <- ccf_filter %>%
-      filter(samplename %in% clinicalTemp$Tumor_Sample_Barcode) %>%
-      mutate(ccube_ccf= ifelse(ccube_ccf>=1,1,ccube_ccf))%>%
-      filter(Variant_Classification %nin%  c('Translation_Start_Site'),
-             Hugo_Symbol %in% c(ksByCancer$Gene,"POLE")) %>%
-      inner_join(oncoPath, by=c("Hugo_Symbol"="Gene")) %>%
+    geneccfFreq = geneccfFreq %>%
       group_by(Pathway) %>%
-      dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename))) %>% 
-      mutate(freq=n/nrow(clinicalTemp)) %>%
-      mutate(freq_value=cut(.$freq,breaks=c(seq(0,1,length.out=10)),labels=seq(15,50,length.out=9)))
-    colnames(geneccfFreq)[1] = "label"
-    
+      dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename))) 
+
   } else {
-    mafTemp   <- maf@data
-    clinicalTemp <- getSampleSummary(x = maf) 
-    clinicalTemp <- left_join(clinicalTemp, manSelect, by = c("Tumor_Sample_Barcode"="samplename")) %>%
-      distinct(Tumor_Sample_Barcode,.keep_all = TRUE)
-    mafClinical = read.maf(maf = mafTemp, clinicalData = clinicalTemp)
-    
-    # neoantigen = clinicalTemp %>% select(Tumor_Sample_Barcode,Neoantigen_mutation.sc) %>%
-    #   distinct(Tumor_Sample_Barcode,.keep_all = TRUE) %>%
-    #   as.data.table()
-    # neoantigen[,Neoantigen_mutation.sc:=ifelse(is.na(Neoantigen_mutation.sc),0,Neoantigen_mutation.sc)]  
-  
-    p_oncoplot = as.ggplot(function()
+    mafClinical = read.maf(maf = mafTemp, clinicalData = clinicalTemp) 
+    res <- getInteractions(maf, top=top_gene, colPal = "PRGn", returnAll = TRUE, sigSymbolsSize=1.5) 
+    geneccfFreq = geneccfFreq %>%
+      group_by(Hugo_Symbol) %>%
+      dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename))) 
+  }
+
+  geneccfFreq = data.table(geneccfFreq)[,freq:= n/nrow(clinicalTemp)]
+  geneccfFreq[,freq_value:=cut(freq,breaks=c(seq(0,1,length.out=10)),labels=seq(15,50,length.out=9))]
+  colnames(geneccfFreq)[1] = "label"
+
+  top_genes = geneccfFreq %>% arrange(desc(freq)) %>% .$label %>% .[1:5] 
+    # Draw oncoplot
+  p_oncoplot = as.ggplot(function()
       if (all(!is.na(oncoplot.feature))) {
-      oncoplot(maf = mafClinical, top=top_gene, removeNonMutated = FALSE, #colors = mycolors, 
-               drawRowBar = TRUE,
-               annotationColor=fabcolors,
-               sortByAnnotation = TRUE, keepGeneOrder = FALSE, bgCol="#F5F5F5",
-               clinicalFeatures=oncoplot.feature)
+        oncoplot(maf = mafClinical, top=top_gene, removeNonMutated = FALSE, #colors = mycolors, 
+                 drawRowBar = TRUE,#annotationColor=fabcolors,
+                 keepGeneOrder = FALSE, bgCol="#F5F5F5",sortByAnnotation = TRUE,
+                 clinicalFeatures=oncoplot.feature,bottom_barplot = TRUE)
+                 
       } else {
-      oncoplot(maf = mafClinical, top=top_gene, removeNonMutated = FALSE, #colors = #mycolors, 
-               drawRowBar = TRUE,
-               sortByAnnotation = TRUE, keepGeneOrder = FALSE, bgCol="#F5F5F5")
+        oncoplot(maf = mafClinical, top=top_gene, removeNonMutated = FALSE, #colors = mycolors, 
+                 drawRowBar = TRUE,sortByAnnotation = TRUE, keepGeneOrder = FALSE, bgCol="#F5F5F5",bottom_barplot = TRUE)
       }
     )
-    geneccfFreq <- ccf_filter %>%
-      filter(samplename %in% clinicalTemp$Tumor_Sample_Barcode) %>%
-      mutate(ccube_ccf= ifelse(ccube_ccf>=1,1,ccube_ccf))%>%
-      filter(Variant_Classification %nin%  c('Translation_Start_Site'),
-             Hugo_Symbol %in% c(ksByCancer$Gene,"POLE"),
-             samplename %in% clinicalTemp$Tumor_Sample_Barcode) %>%
-      group_by(Hugo_Symbol) %>%
-      dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename))) %>% 
-      mutate(freq=n/nrow(clinicalTemp)) %>%
-      mutate(freq_value=cut(.$freq,breaks=c(seq(0,1,length.out=10)),labels=seq(15,31,by=2))) %>%
-      arrange(desc(freq))
-    colnames(geneccfFreq)[1] = "label"
     
-    res <- getInteractions(maf, top=top_gene, colPal = "PRGn", returnAll = TRUE, sigSymbolsSize=1.5) 
-    p_interheatmap = interaction_heatmap(res)
-    gene_edges = res$pairs %>% filter(pValue<p_value) 
-    gene_nodes = cbind(gene_edges$gene1,gene_edges$gene2) %>% t(.) %>% as.character() %>% c(.,"APC","TP53","POLE","KRAS","BRAF","PIK3CA","FBXW7") %>% unique(.)
-    gene_nodes_col = data.frame(Gene=gene_nodes) %>%  
-      left_join(oncoPath, by="Gene") %>%
-      left_join( pathway_col,by="Pathway") %>%
-      distinct(Gene,.keep_all = TRUE)
-   
-   
-  }
-  
-  if (length(gene_nodes)>0) {
-    
-    nodes <- data.frame(id = 1:length(gene_nodes),
-                        label = gene_nodes,
-                        group = gene_nodes_col$Pathway,
-                        color = gene_nodes_col$col,
-                        shadow = TRUE) %>%
-      left_join(geneccfFreq,by="label") 
-    
-    
-    nodes = nodes[which(nodes[,ccf_type]>0),] %>%
-      mutate(value=cut(.[,ccf_type],breaks=(1:10)/10,labels=1:9))
-    
-    nodes[,ccf_type] =round(nodes[,ccf_type],3)
-    return(list(nodes,gene_edges,p_oncoplot,p_interheatmap))
-  } else {
-    nodes <- data.frame(id = NA)
-    return(list(nodes,nodes,p_oncoplot,p_interheatmap))
-  }
+    # Draw interaction heatmap
+    p_interheatmap <- interaction_heatmap(res)
+
+    # Get nodes
+    gene_edges <- res$pairs[pValue < p_value]
+    gene_nodes <- cbind(gene_edges$gene1, gene_edges$gene2) %>% t(.) %>% as.character() %>% unique(.)
+    gene_nodes_col <- data.frame(Pathway = gene_nodes) %>% left_join(pathway_col, by="Pathway")
+
+    if (!pathway) {
+      gene_nodes= c(gene_nodes,top_genes) %>% unique(.)
+      gene_nodes_col = data.frame(Gene=gene_nodes) %>%  
+        left_join(oncoPath,by="Gene") %>%
+        left_join(pathway_col,by="Pathway") %>%
+        distinct(Gene,.keep_all = TRUE)
+    }
+
+    if (length(gene_nodes) > 0) {
+      nodes <- data.frame(id = seq_len(gene_nodes),
+                          label = gene_nodes,
+                          group = gene_nodes_col$Pathway,
+                          color = gene_nodes_col$col,
+                          shadow = TRUE) %>%
+        inner_join(geneccfFreq, by = "label")
+      nodes <- nodes[which(nodes[, ccf_type] > 0),] %>%
+        mutate(value = cut(.[,ccf_type],breaks = (1:10) / 10,labels = 1:9))
+      nodes[, ccf_type] <- round(nodes[, ccf_type], 3)
+
+      return(list(nodes, gene_edges, p_oncoplot, p_interheatmap))
+    } else {
+      nodes <- data.frame(id = NA)
+      return(list(nodes, nodes, p_oncoplot, p_interheatmap))
+    }
  
 }
+
 interaction_heatmap <- function(res) {
-  library(reshape2)
+
   melted_cormat <- reshape2::melt(res$interactions, na.rm = TRUE) %>%
-    mutate(text=ifelse(abs(value)>-log10(0.01),"*",ifelse(abs(value)>-log10(0.05),"¡¤",NA)))
+    mutate(text=ifelse(abs(value)>-log10(0.01),"*",ifelse(abs(value)>-log10(0.05),"ï¿½ï¿½",NA)))
   melted_cormat %>%
     ggplot()+geom_tile(aes(Var1, Var2, fill = value),color="White")+
     geom_text(aes(x=Var1,y=Var2,label=text),color="white",size=8)+
@@ -271,9 +231,14 @@ interaction_heatmap <- function(res) {
   
 }
 
-Coocrrence_network_plot <- function(types,manSelect,ks_path,ccf_path,oncoPath,output=NA,ccf_type,oncoplot.feature.col,p_value=0.05,top_gene,pathway,oncoplot.feature) {
+popfunction <- function(p,position) {
+    eval(parse(text=paste0("pushViewport(viewport(",position,",just=c('left','top')))")))
+    grid.draw(as.grob(p))
+    popViewport()
+  }
+
+Coocrrence_network_plot <- function(types,manSelect,ks_path,ccf_path,oncoPath,output=NA,ccf_type,p_value=0.05,top_gene,pathway) {
   
- 
   print(types)
 
   if (nchar(types)==8) typesMaf = c(substr(types,1,4),substr(types,5,8)) else typesMaf = types
@@ -284,8 +249,8 @@ Coocrrence_network_plot <- function(types,manSelect,ks_path,ccf_path,oncoPath,ou
   
   #load ccf files
   for (j in 1:length(ccf_path) ) {
-    if (j==1) ccf_all= get(load(paste0(folder_path,"Figures and Data/CCF/",ccf_path[1]))) else 
-      ccf_all = rbind(ccf_all,get(load(paste0(folder_path,"Figures and Data/CCF/",ccf_path[j]))))
+    if (j==1) ccf_all= get(load(ccf_path[1])) else 
+      ccf_all = rbind(ccf_all,get(load(ccf_path[j])))
   }
 
   ccf_filter = ccf_all %>% 
@@ -312,55 +277,39 @@ Coocrrence_network_plot <- function(types,manSelect,ks_path,ccf_path,oncoPath,ou
                         query = "Variant_Classification %nin%  c('Translation_Start_Site')")
   
   # Perform interaction analysis using oncogenic pathway data
-  NodeEdges4=mafToNodeEdges(maf=mafEsig4,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges3=mafToNodeEdges(maf=mafEsig3,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges4_pathway=mafToNodeEdges(mafEsig4,pathway=TRUE,top_gene=10,p_value=0.05,ksByCancer=ksByCancer,oncoplot.feature=oncoplot.feature,ccf_filter=ccf_filter,fabcolors = oncoplot.feature.col)
-  NodeEdges3_pathway=mafToNodeEdges(mafEsig3,pathway=TRUE,top_gene=10,p_value=0.05,ksByCancer=ksByCancer,oncoplot.feature=oncoplot.feature,ccf_filter=ccf_filter,fabcolors = oncoplot.feature.col)
+  NodeEdges4=mafToNodeEdges(maf=mafEsig4,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoPath=oncoPath)
+  NodeEdges3=mafToNodeEdges(maf=mafEsig3,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoPath=oncoPath)
+  NodeEdges4_pathway=mafToNodeEdges(mafEsig4,pathway=TRUE,top_gene=10,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoPath=oncoPath)
+  NodeEdges3_pathway=mafToNodeEdges(mafEsig3,pathway=TRUE,top_gene=10,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoPath=oncoPath)
 
   # gene network
   if (nrow(NodeEdges4[[2]])>0 & ncol(NodeEdges4[[2]])>1) 
-  p1=ggraph_plot(nodes=NodeEdges4[[1]],edges=NodeEdges4[[2]],fill=TRUE,p_value=0.01,title="ESig4") 
+    p1=ggraph_plot(nodes=NodeEdges4[[1]],edges=NodeEdges4[[2]],fill=TRUE,p_value=0.01,title="ESig4") 
   if (nrow(NodeEdges3[[2]])>0 & ncol(NodeEdges3[[2]])>1) 
-  p2=ggraph_plot(nodes=NodeEdges3[[1]],edges=NodeEdges3[[2]],fill=TRUE,p_value=0.01,title="ESig3") 
-  
-  # oncoplot
-  p3=NodeEdges4[[3]]
-  p4=NodeEdges3[[3]]
-  # Pathway network
-  if (nrow(NodeEdges4_pathway[[2]])>0 & ncol(NodeEdges4_pathway[[2]])>1) p5=ggraph_plot(nodes=NodeEdges4_pathway[[1]],edges=NodeEdges4_pathway[[2]],fill=TRUE,p_value=0.05,title="",no_layout = TRUE,subtitle="Pathway") 
-  if (nrow(NodeEdges3_pathway[[2]])>0 & ncol(NodeEdges3_pathway[[2]])>1) p6=ggraph_plot(nodes=NodeEdges3_pathway[[1]],edges=NodeEdges3_pathway[[2]],fill=TRUE,p_value=0.05,title="",subtitle="Pathway") 
-  
-  grid.newpage()
-  pushViewport(viewport(x = 0, y=1,width = 0.25,height = 0.5,just = c("left", "top")))
-  grid.draw(as.grob(p1))
-  popViewport()
-  
+    p2=ggraph_plot(nodes=NodeEdges3[[1]],edges=NodeEdges3[[2]],fill=TRUE,p_value=0.01,title="ESig3") 
 
-  pushViewport(viewport(x = 0.25, y=1,width = 0.25,height = 0.5,just = c("left", "top")))
-  grid.draw(as.grob(p5))
-  popViewport()
+  # oncoplot
+  p31=NodeEdges4[[3]];p41=NodeEdges3[[3]]
+  p32=NodeEdges4_pathway[[3]];p42=NodeEdges3_pathway[[3]]
   
-  pushViewport(viewport(x = 0.5, y=1,width = 0.5,height = 0.5,just = c("left", "top")))
-  grid.draw(as.grob(p3))
-  popViewport()
+  # Pathway network
+  if (nrow(NodeEdges4_pathway[[2]])>0 & ncol(NodeEdges4_pathway[[2]])>1) 
+    p5=ggraph_plot(nodes=NodeEdges4_pathway[[1]],edges=NodeEdges4_pathway[[2]],fill=TRUE,p_value=0.05,title="",no_layout = TRUE,subtitle="Pathway") 
+
+  if (nrow(NodeEdges3_pathway[[2]])>0 & ncol(NodeEdges3_pathway[[2]])>1) 
+    p6=ggraph_plot(nodes=NodeEdges3_pathway[[1]],edges=NodeEdges3_pathway[[2]],fill=TRUE,p_value=0.05,title="",subtitle="Pathway") 
+
+
+  grid.newpage()
+  popfunction(p1,position="x = 0, y=1,width = 0.25,height = 0.5")       # ESig4 - Gene Network
+  popfunction(p5,position="x = 0.25, y=1,width = 0.25,height = 0.5")    # ESig4 - Pathway Network
+  popfunction(p31,position="x = 0.6, y=1,width = 0.4,height = 0.25")    # ESig4 - Gene Oncoplot
+  popfunction(p31,position="x = 0.6, y=0.75,width = 0.4,height = 0.25") # ESig4 - Pathway Oncoplot
+  popfunction(p2,position="x = 0, y=0.5,width = 0.25,height = 0.5")     # ESig3 - Gene Network
+  popfunction(p6,position="x = 0.25, y=0.5,width = 0.25,height = 0.5")  # ESig3 - Pathway Network
+  popfunction(p41,position="x = 0.6, y=0.5,width = 0.4,height = 0.25")  # ESig3 - Gene Network
+  popfunction(p42,position="x = 0.6, y=0.25,width = 0.4,height = 0.25") # ESig3 - Pathway Network
   
- 
-  pushViewport(viewport(x = 0, y=0.5,width = 0.25,height = 0.5,just = c("left", "top")))
-  grid.draw(as.grob(p2))
-  popViewport()
-  # vp = viewport(x=.8, y=.75, width=.3, height=.4)
-  # pushViewport(vp)
-  # grid.draw(as.grob(p5))
-  # upViewport()
-  pushViewport(viewport(x = 0.25, y=0.5,width = 0.25,height = 0.5,just = c("left", "top")))
-  grid.draw(as.grob(p6))
-  popViewport()
-  
-  pushViewport(viewport(x = 0.5, y=0.5,width = 0.5,height = 0.5,just = c("left", "top")))
-  grid.draw(as.grob(p4))
-  popViewport()
-  
- 
   caption=paste0("Top ",top_gene," genes with significant ccf transition. \n Edge width represents the strength of p value, only edges with p>",p_value," were shown. \n Circle size represent population frequency of each gene.")
   #subtitle = 
   
@@ -378,21 +327,16 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
   
   if (nchar(types)==8) typesMaf = c(substr(types,1,4),substr(types,5,8)) else typesMaf = types
   
-  ksByCancer = read.csv(ks_path) %>%
-    filter(cancertype %in% paste0(sort(typesMaf),collapse  = "")) %>% 
-    filter(significant_ks == 1)
+  ksByCancer = fread(ks_path)[cancertype %in% paste0(sort(typesMaf),collapse  = "") & significant_ks == 1]
 
   #load ccf files
   for (j in 1:length(ccf_path) ) {
-    if (j==1) ccf_all= get(load(paste0(folder_path,"Figures and Data/CCF/",ccf_path[1]))) else 
-      ccf_all = rbind(ccf_all,get(load(paste0(folder_path,"Figures and Data/CCF/",ccf_path[j]))))
+    ccf_load = get(load(ccf_path))
+    if (j==1) ccf_all= ccf_load else ccf_all = rbind(ccf_all,ccf_load)
   }
   
-  ccf_filter = ccf_all %>% 
-    mutate(samplename = substr(Matched_Norm_Sample_Barcode,1,12)) %>%
-    filter(samplename %in% manSelect$samplename)
- 
-  
+  ccf_filter = data.table(ccf_all)[,samplename := substr(Matched_Norm_Sample_Barcode,1,12)][samplename %in% manSelect$samplename]
+    
   # Load MAF
   if (types != "All") {
     lstObject <- lapply(typesMaf, function(i) tcga_load(i))
@@ -401,9 +345,8 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
   }
   
   ### Load selected gene ccf file
-  geneCounts <- ksByCancer %>% count(Gene, sort = TRUE, name = "n_genes_across_cancertype") %>%
-    rbind(c("POLE",1))
-  
+  geneCounts <- ksByCancer %>% count(Gene, sort = TRUE, name = "n_genes_across_cancertype") %>% rbind(list("POLE",1))
+
   mergeMaf<- merge_mafs(lstObject)
   mergeMaf@data$Tumor_Sample_Barcode = substr(as.character(mergeMaf@data$Tumor_Sample_Barcode),1,12)
   
@@ -427,21 +370,22 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
                             query = "Variant_Classification %nin%  c('Translation_Start_Site')")
   
   # Perform interaction analysis using oncogenic pathway data
-  NodeEdges4=mafToNodeEdges(maf=mafEsig4,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges3=mafToNodeEdges(maf=mafEsig3,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges4_pathway=mafToNodeEdges(mafEsig4,pathway=TRUE,top_gene=10,p_value=0.05,ksByCancer=ksByCancer,oncoplot.feature=oncoplot.feature,ccf_filter=ccf_filter,fabcolors = oncoplot.feature.col)
-  NodeEdges3_pathway=mafToNodeEdges(mafEsig3,pathway=TRUE,top_gene=10,p_value=0.05,ksByCancer=ksByCancer,oncoplot.feature=oncoplot.feature,ccf_filter=ccf_filter,fabcolors = oncoplot.feature.col)
   
-  NodeEdges4MSS=mafToNodeEdges(mafEsig4MSS,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges4MMR=mafToNodeEdges(mafEsig4MMR,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges4POLE=mafToNodeEdges(maf=mafEsig4POLE,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges3MSS=mafToNodeEdges(mafEsig3MSS,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges3MMR=mafToNodeEdges(mafEsig3MMR,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
-  NodeEdges3POLE=mafToNodeEdges(maf=mafEsig3POLE,top_gene=30,p_value=0.05,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col)
+  NodeEdges4=mafToNodeEdges(maf=mafEsig4,top_gene=30,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  NodeEdges3=mafToNodeEdges(maf=mafEsig3,top_gene=30,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  NodeEdges4_pathway=mafToNodeEdges(mafEsig4,pathway=TRUE,top_gene=10,ksByCancer=ksByCancer,oncoplot.feature=oncoplot.feature,ccf_filter=ccf_filter,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  NodeEdges3_pathway=mafToNodeEdges(mafEsig3,pathway=TRUE,top_gene=10,ksByCancer=ksByCancer,oncoplot.feature=oncoplot.feature,ccf_filter=ccf_filter,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  
+  NodeEdges4MSS =mafToNodeEdges(mafEsig4MSS,top_gene=30,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  NodeEdges4MMR =mafToNodeEdges(mafEsig4MMR,top_gene=30,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  NodeEdges4POLE=mafToNodeEdges(mafEsig4POLE,top_gene=30,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  NodeEdges3MSS =mafToNodeEdges(mafEsig3MSS,top_gene=30,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  NodeEdges3MMR =mafToNodeEdges(mafEsig3MMR,top_gene=30,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
+  NodeEdges3POLE=mafToNodeEdges(mafEsig3POLE,top_gene=30,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath)
   
   # gene network
-  if (nrow(NodeEdges4[[2]])>0 & ncol(NodeEdges4[[2]])>1) p1=ggraph_plot(nodes=NodeEdges4[[1]],edges=NodeEdges4[[2]],fill=TRUE,p_value=0.01,title="ESig4") 
-  if (nrow(NodeEdges3[[2]])>0 & ncol(NodeEdges3[[2]])>1) p2=ggraph_plot(nodes=NodeEdges3[[1]],edges=NodeEdges3[[2]],fill=TRUE,p_value=0.01,title="ESig3") 
+  if (nrow(NodeEdges4[[2]])>0 & ncol(NodeEdges4[[2]])>1) p1=ggraph_plot(nodes=NodeEdges4[[1]],edges=NodeEdges4[[2]],fill=TRUE,p_value=p_value,title="ESig4") 
+  if (nrow(NodeEdges3[[2]])>0 & ncol(NodeEdges3[[2]])>1) p2=ggraph_plot(nodes=NodeEdges3[[1]],edges=NodeEdges3[[2]],fill=TRUE,p_value=p_value,title="ESig3") 
 
   # oncoplot
   p31=NodeEdges4[[3]];p41=NodeEdges3[[3]]
@@ -461,69 +405,23 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
   if (nrow(NodeEdges3POLE[[2]])>0 & ncol(NodeEdges3POLE[[2]])>1) p23=ggraph_plot(nodes=NodeEdges3POLE[[1]],edges=NodeEdges3POLE[[2]],fill=TRUE,p_value=0.05,title="",no_layout = TRUE,subtitle="POLE") 
   
   # ESig3 - Gene Network
+
   grid.newpage()
-  pushViewport(viewport(x = 0, y=1,width = 0.3,height = 0.25,just = c("left", "top")))
-  grid.draw(as.grob(p1))
-  popViewport()
-  
-  pushViewport(viewport(x = 0, y=0.75,width = 0.2,height = 0.2,just = c("left", "top")))
-  grid.draw(as.grob(p11))
-  popViewport()
-  
-  pushViewport(viewport(x = .2, y=0.75,width = 0.2,height = 0.2,just = c("left", "top")))
-  grid.draw(as.grob(p12))
-  popViewport()
-  
-  pushViewport(viewport(x = .4, y=0.75,width = 0.2,height = 0.2,just = c("left", "top")))
-  grid.draw(as.grob(p13))
-  popViewport()
-  
-  # ESig3 - Pathway Network
-  pushViewport(viewport(x = 0.3, y=1,width = 0.3,height = 0.25,just = c("left", "top")))
-  grid.draw(as.grob(p5))
-  popViewport()
-  
-  # ESig3 - Oncoplot
-  pushViewport(viewport(x = 0.6, y=1,width = 0.4,height = 0.25,just = c("left", "top")))
-  grid.draw(as.grob(p31))
-  popViewport()
-  
-  pushViewport(viewport(x = 0.6, y=0.75,width = 0.4,height = 0.25,just = c("left", "top")))
-  grid.draw(as.grob(p32))
-  popViewport()
-  
-  # ESig4 - Gene Network
-  pushViewport(viewport(x = 0, y=0.5,width = 0.3,height = 0.25,just = c("left", "top")))
-  grid.draw(as.grob(p2))
-  popViewport()
-  
-  pushViewport(viewport(x = 0, y=0.25,width = 0.2,height = 0.2,just = c("left", "top")))
-  grid.draw(as.grob(p21))
-  popViewport()
-  
-  pushViewport(viewport(x = .2, y=0.25,width = 0.2,height = 0.2,just = c("left", "top")))
-  grid.draw(as.grob(p22))
-  popViewport()
-  
-  pushViewport(viewport(x = .4, y=0.25,width = 0.2,height = 0.2,just = c("left", "top")))
-  grid.draw(as.grob(p23))
-  popViewport()
-  
-  # ESig4 - Pathway Network
-  pushViewport(viewport(x = 0.3, y=0.5,width = 0.3,height = 0.25,just = c("left", "top")))
-  grid.draw(as.grob(p6))
-  popViewport()
-  
-  # ESig4 - Ocoplot
-  pushViewport(viewport(x = 0.6, y=0.5,width = 0.4,height = 0.25,just = c("left", "top")))
-  grid.draw(as.grob(p41))
-  popViewport()
-  
-  pushViewport(viewport(x = 0.6, y=0.25,width = 0.4,height = 0.25,just = c("left", "top")))
-  grid.draw(as.grob(p42))
-  popViewport()
-  
-  
+  popfunction(p1,position="x = 0, y=1,width = 0.3,height = 0.25")       # ESig4 - Gene Network
+  popfunction(p11,position="x = 0, y=0.75,width = 0.2,height = 0.2")    # ESig4 - Subtype1 Gene Network
+  popfunction(p12,position="x = .2, y=0.75,width = 0.2,height = 0.2")   # ESig4 - Subtype2 Gene Network
+  popfunction(p13,position="x = .4, y=0.75,width = 0.2,height = 0.2")   # ESig4 - Subtype3 Gene Network
+  popfunction(p5,position="x = 0.3, y=1,width = 0.3,height = 0.25")     # ESig4 - Pathway Network
+  popfunction(p31,position="x = 0.6, y=1,width = 0.4,height = 0.25")    # ESig4 - Gene Oncoplot
+  popfunction(p32,position="x = 0.6, y=0.75,width = 0.4,height = 0.25") # ESig4 - Pathway Oncoplot
+  popfunction(p2,position="x = 0, y=0.5,width = 0.3,height = 0.25")     # ESig3 - Gene Network
+  popfunction(p21,position="x = 0, y=0.25,width = 0.2,height = 0.2")    # ESig3 - Subtype1 Gene Network
+  popfunction(p22,position="x = .2, y=0.25,width = 0.2,height = 0.2")   # ESig3 - Subtype2 Gene Network
+  popfunction(p23,position="x = .4, y=0.25,width = 0.2,height = 0.2")   # ESig3 - Subtype3 Gene Network
+  popfunction(p6,position="x = 0.3, y=0.5,width = 0.3,height = 0.25")   # ESig3 - Pathway Network
+  popfunction(p41,position="x = 0.6, y=0.5,width = 0.4,height = 0.25")  # ESig3 - Gene Oncoplot
+  popfunction(p42,position="x = 0.6, y=0.25,width = 0.4,height = 0.25") # ESig3 - Pathway Oncoplot
+
   caption=paste0("Top ",top_gene," genes with significant ccf transition. \n Edge width represents the strength of p value, only edges with p<",p_value," were shown. \n Circle size represent population frequency of each gene.")
   #subtitle = 
   
@@ -534,23 +432,9 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,ks_path,ccf_path,oncoPat
   if (!is.na(output)) { ggsave(output,width = 20, height = 15)} 
 }
 
-  
-  #legend
-    # data.frame(group=pathway_col)
-    # pathway_col_values=pathway_col$col
-    # names(pathway_col_values) = pathway_col$Pathway
-    # pathway = pathway_col %>% ggplot() + geom_point(aes(x=Pathway,y=1,fill=Pathway,color=Pathway),size=9) + 
-    #   scale_color_manual(values= values)+
-    #   scale_fill_manual(values= values)+
-    #   theme_void()
-    # legend_pathway = extractLegend(pathway)
-    # 
-    # data.frame(value = (1:9)/10,fre_labels=seq(15,31,by=2)) %>%
-    #   ggplot() + geom_point(aes(x=value,y=1,cex=fre_labels)) 
-    # 
-    # scales::show_col(pathway_col$col)
-    # p2+theme(legend.position = "none")
-    # 
-      
+
+oncoplot_function <- function(mat) {
+
+}
     
 
