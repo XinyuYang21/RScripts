@@ -467,8 +467,8 @@ plot_layout = function(clinicalFeatures = NULL, drawRowBar = TRUE,
         }
       }else{
         if (is.null(exprsTbl)) {
-          mat_lo = matrix(data = c(1,2,3,4,5,6,7,0,8,8), nrow = 5, ncol = 2, byrow = TRUE)
-          lo = graphics::layout(mat = mat_lo, widths = c(4, 1), heights = c(4, 11, anno_height+1, 3, legend_height))
+          mat_lo = matrix(data = c(1,2,7,0,3,4,5,6,8,8), nrow = 5, ncol = 2, byrow = TRUE)
+          lo = graphics::layout(mat = mat_lo, widths = c(4, 1), heights = c(4, 3, 11, anno_height+1, legend_height))
         } else {
           mat_lo = matrix(data = c(1,2,3,4,5,6,7,8,9,10,11,12,13,13,13), nrow = 5, ncol = 3, byrow = TRUE)
           lo = graphics::layout(mat = mat_lo, widths = c(1, 4, 1), heights = c(4, 12, anno_height, 4, legend_height))

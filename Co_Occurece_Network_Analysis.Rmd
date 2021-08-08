@@ -108,9 +108,10 @@ editor_options:
     ccf_path = paste0(folder_path,"/CCF/",dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])
 
     manSelect <- read.csv(Esig_path) %>% 
-      filter(cancertype ==i,subtype %in% c("ESig3","ESig4"))  %>%
-      mutate(Clonal_neoantigen_cat=cut(.$Clonal_neoantigen,breaks=c(0,10,50,100,500,1000),labels=c("0-10","10-50","50-100","100-500","500-1000")))
-    
+      filter(cancertype ==i,subtype %in% c("ESig3","ESig4")) 
+    manSelect$HLA = 
+
+
     gistic <- Gistic %>%
       melt(id=colnames(.)[1]) %>%
       filter(value %in% c(-2,2)) %>%
@@ -126,8 +127,8 @@ editor_options:
     
 
     if (i %in% c("COADREAD","STAD","UCEC"))  {
-      oncoplot.feature=c("Subtype","Escape","Tcell_score","Clonal_neoantigen_cat")
-      oncoplot.feature=c("Subtype","Escape","Tcell_score","Clonal_neoantigen_cat","BLS.altered","POLE.altered","MSI")
+      oncoplot.feature=c("Subtype","Escape","Tcell_score")
+      oncoplot.feature=c("Subtype","Escape","Tcell_score","BLS.altered","POLE.altered","MSI")
       manSelect
     } else {
       Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath)

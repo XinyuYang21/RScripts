@@ -168,7 +168,7 @@ mafToNodeEdges <- function(maf,ccf_filter,ksByCancer,pathway=FALSE,top_gene,onco
         oncoplot(maf = mafClinical, top=top_gene, removeNonMutated = FALSE, #colors = mycolors, 
                  drawRowBar = TRUE,#annotationColor=fabcolors,
                  keepGeneOrder = FALSE, bgCol="#F5F5F5",sortByAnnotation = TRUE,
-                 clinicalFeatures=oncoplot.feature,bottom_barplot = TRUE)
+                 clinicalFeatures=oncoplot.feature,bottom_barplot = TRUE,bottom.feature  = "Neoantigen_mutation")
                  
       } else {
         oncoplot(maf = mafClinical, top=top_gene, removeNonMutated = FALSE, #colors = mycolors, 
