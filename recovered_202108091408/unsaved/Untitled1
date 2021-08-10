@@ -1,0 +1,109 @@
+manSelect %>%
+  ggplot(aes(x=Esig_3_proportion,y=Leukocyte.Fraction)) + geom_point(aes(fill=Subtype,color=Subtype))+
+  facet_grid(cols=vars(subtype))+
+  title("COADREAD")
+
+manSelect %>%
+  filter(cancertype =="COADREAD") %>%
+  ggplot(aes(x=subtype,y=Leukocyte.Fraction)) + geom_boxplot()+
+  geom_jitter(aes(fill=Subtype,color=Subtype))
+colnames(TableS1D)[1] = "samplename"
+manSelect =manSelect %>%
+  left_join(TableS1D[,c(1,7)],by="samplename") 
+data$NEO250
+manSelect = manSelect %>%
+  mutate(Neoantigen_mutation=as.numeric(Neoantigen_mutation))
+
+write.csv(manSelect,file=Esig_path)
+data$PMS2_loc
+
+genotype_file <- system.file("examples/Genotype.txt", package="ggtree")
+genotype <- read.table(genotype_file, sep="\t", stringsAsFactor=F)
+colnames(genotype) <- sub("\\.", "", colnames(genotype))
+genotype[genotype == "trig"] <- "TRIG"
+genotype[genotype == "pdm"] <- "Pdm/09"
+
+BiocManager::install("ggtree")
+install.packages("ggtree")
+library(ggtree)
+library(treeio)
+library(ggtree)
+
+beast_file <- system.file("examples/MCC_FluA_H3.tree", 
+                          package="ggtree")
+rst_file <- system.file("examples/rst", package="ggtree")
+mlc_file <- system.file("examples/mlc", package="ggtree")
+
+beast_tree <- read.beast(beast_file)
+beast_tree@data
+codeml_tree <- read.codeml(rst_file, mlc_file)
+merged_tree <- merge_tree(beast_tree, codeml_tree)
+
+cols <- scale_color(merged_tree, "dN_vs_dS", 
+                    low="#0072B2", high="#D55E00",
+                    interval=seq(0, 1.5, length.out=100))
+p <- ggtree(merged_tree, size=.8, mrsd="2013-01-01", 
+            ndigits = 2, color=cols)
+p <- add_colorbar(p, cols, font.size=3)
+
+p <- p + geom_text(aes(label=posterior), color="darkgreen", 
+                   vjust=-.1, hjust=-.03, size=1.8)
+
+
+
+p <- gheatmap(p, genotype, width=.4, offset=7, colnames=F) %>% 
+  scale_x_ggtree
+p + scale_fill_brewer(palette="Set2") + theme_tree2() + 
+  scale_y_continuous(expand=c(0, 0.6)) + xlab("Time") +
+  theme(legend.text=element_text(size=8), 
+        legend.key.height=unit(.5, "cm"),
+        legend.key.width=unit(.4, "cm"), 
+        legend.position=c(.13, y=.945),
+        axis.text.x=element_text(size=10), 
+        axis.title.x = element_text(size=12))
+
+ma
+om = createOncoMatrix(m = maf, g = genes, cbio = cBioPortal)
+numMat = om$numericMatrix
+
+
+devtools::install_github("BIMIB-DISCo/TRONCO")
+install_github("BIMIB-DISCo/TRONCO")
+library(TRONCO)
+
+# Working directory
+workdir = "TCGA-data/"
+dir.create(workdir)
+# Data files
+datafile = 'TCGA-COADREAD-TRONCO.zip'
+download.file('https://github.com/BIMIB-DISCo/datasets/raw/master/TCGA-COADREAD-TRONCO.zip',
+               destfile=datafile,
+               method='curl',
+               extra='-L')
+unzip(datafile, exdir = workdir)
+# Name input files
+clinical.file = paste0(workdir, "/Clinical/crc_clinical_sheet.txt")
+MAF.file = paste0(workdir, "/Mutations/TCGA_CRC_Suppl_Table2_Mutations_20120719.csv")
+GISTIC.file = "C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes"
+clusters.file = paste0(workdir, "/Clusters/TCGA-clusters.csv")
+{\tt MUTEX}.msi.file = paste0(workdir, "/{\tt MUTEX}/msi_results.txt")
+{\tt MUTEX}.mss.file = paste0(workdir, "/{\tt MUTEX}/mss_results.txt")
+# Then this files sources the other scripts
+source(’scripts/TCGA-import.R’, echo = TRUE)
+source(’scripts/training-samples.R’, echo = TRUE)
+source(’scripts/training-exclusivity.R’, echo = TRUE)
+source(’scripts/training-reconstruction.R’, echo = TRUE)
+source(’scripts/validation-samples.R’, echo = TRUE)
+source(’scripts/validation-pvalues.R’, echo = TRUE)
+
+# Load as a plain table
+GISTIC = read.table(
+  GISTIC.file,
+  check.names = FALSE,
+  stringsAsFactors = FALSE,
+  header = TRUE)
+
+
+Gistic <- read.delim("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes")
+
+x = read.maf(maf = res2.maf, cnTable = cnv.table)

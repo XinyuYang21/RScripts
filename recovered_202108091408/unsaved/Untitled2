@@ -1,0 +1,85 @@
+library(rpart)				        # Popular decision tree algorithm
+install.packages("rattle")
+library(rattle)					# Fancy tree plot
+library(rpart.plot)				# Enhanced tree plots
+library(RColorBrewer)				# Color selection for fancy tree plot
+library(party)					# Alternative decision tree algorithm
+install.packages("party")
+library(partykit)				# Convert rpart object to BinaryTree
+install.packages("partykit")
+library(caret)	
+install.packages("caret")
+
+data(segmentationData)				# Get some data
+data <- segmentationData[,-c(1,2)]
+
+# Make big tree
+form <- as.formula(Class ~ .)
+tree.1 <- rpart(form,data=data,control=rpart.control(minsplit=20,cp=0))
+# 
+plot(tree.1)					# Will make a mess of the plot
+text(tree.1)
+
+maf=mafEsig4@data
+dat = createOncoMatrix(mafEsig4,g=maf$Hugo_Symbol)$oncoMatrix 
+dat = dat %>%
+  
+  t() %>%
+  as.data.frame() %>%
+  mutate(samplename= colnames(dat)) 
+dat[is.na(dat)]
+
+form <- as.formula(samplename ~ .)
+tree.1 <- rpart(form,data=dat,control=rpart.control(minsplit=20,cp=0))
+# 
+prp(tree.1)					# Will plot the tree
+prp(tree.1,varlen=3)				# Shorten variable names
+
+
+## Survival
+manSelect = filter(manSelect,OS.Time)
+surv_object <- Surv(time = manSelect$OS.Time, event = manSelect$OS.y)
+fit1 <- survfit(surv_object ~ subtype, data =manSelect)
+
+
+ggsurvplot(
+  fit1,                     # survfit object with calculated statistics.
+  data = manSelect,             # data used to fit survival curves.
+  risk.table = TRUE,       # show risk table.
+  pval = TRUE,             # show p-value of log-rank test.
+  conf.int = TRUE,         # show confidence intervals for 
+  # point estimates of survival curves.
+  xlim = c(0,1000),         # present narrower X axis, but not affect
+  # survival estimates.
+  xlab = "Time in days",   # customize X axis label.
+  break.time.by = 100,     # break X axis in time intervals by 500.
+  ggtheme = theme_light(), # customize plot and risk table with a theme.
+
+)
+install.packages("survival")
+install.packages("survminer")
+library(survival)
+library(survminer)
+ggsurvplot(fit1, data = manSelect, pval = TRUE)
+
+# Interatively prune the tree
+new.tree.1 <- prp(tree.1,snip=TRUE)$obj # interactively trim the tree
+prp(new.tree.1) # display the new tree
+#
+#-------------------------------------------------------------------
+tree.2 <- rpart(form,data)			# A more reasonable tree
+prp(tree.2)                                     # A fast plot													
+fancyRpartPlot(tree.2)				# A fancy plot from rattle
+#
+#-------------------------------------------------------------------
+# Plot a tree built with RevoScaleR
+# Construct a model formula
+sdNames <- names(segmentationData)
+X <- as.vector(sdNames[-c(1,2,3)])
+form <- as.formula(paste("Class","~", paste(X,collapse="+")))
+# Run the model
+rx.tree <- rxDTree(form, data = segmentationData,maxNumBins = 100,
+                   minBucket = 10,maxDepth = 5,cp = 0.01, xVal = 0)
+# Plot the tree						
+prp(rxAddInheritance(rx.tree))
+fancyRpartPlot(rxAddInheritance(rx.tree))

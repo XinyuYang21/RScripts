@@ -397,7 +397,7 @@ oncoplot = oncoplot = function(maf, top = 20, minMut = NULL, genes = NULL, alter
 
   #Plot layout
   plot_layout(clinicalFeatures = clinicalFeatures, drawRowBar = drawRowBar, anno_height = anno_height,
-              drawColBar = drawColBar, draw_titv = draw_titv, exprsTbl = leftBarData, legend_height = legend_height,bottom_barplot = bottom_barplot)
+              drawColBar = drawColBar, draw_titv = draw_titv, exprsTbl = leftBarData, legend_height = legend_height)
 
   #01: Draw scale axis for left barplot table
   leftBarTitle = NULL
@@ -1044,15 +1044,9 @@ oncoplot = oncoplot = function(maf, top = 20, minMut = NULL, genes = NULL, alter
       x = bottom_bar_data[,i]
       if(length(x) > 0){
         rect(xleft = i-1, ybottom = 0, xright = i-0.1,
-             ytop = x, col = "#FCD113FB", border = NA, lwd = 0)
+             ytop = x, col = vc_col[1], border = NA, lwd = 0)
       }
     } 
-
-    if(logColBar){
-      mtext(text = "(log10)", side = 2, line = 2, cex = 0.6)
-    }else{
-      mtext(text = "Subclonal Neoantigens", side = 2, line = 2, cex = 0.6)
-    }
   }
   #08: Add legends
   par(mar = c(0, 0.5, 0, 0), xpd = TRUE)

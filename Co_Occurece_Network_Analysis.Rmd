@@ -43,6 +43,7 @@ editor_options:
   library(patchwork)
   library(ggplotify)
   #delete dplyr - #count
+  library(UCSCXenaTools)
 
   folder_path = "C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Figures and Data/" # nolint
 
@@ -60,85 +61,76 @@ editor_options:
   oncoPath <-  read.csv(paste0(folder_path,"Oncogenic_pathways.csv"))
   dir_all = dir(paste0(folder_path,"CCF/"))
   
-  { # Oncoplot Annotation Color
-      Subtype_colors <- c("#0072B5","#E18727","#20854E") #colorRampPalette(pal_nejm("default", alpha = 1)(8))(8)[2:4]
-      names(Subtype_colors ) <- c("POLE","MSS","MMR")
-    
-      Escape_colors <- c("#0073C2","#D1B618","#B26661","#A37C94","springgreen3","grey40") #colorRampPalette(pal_jco("default", alpha = 1)(8))(9)[c(1,2,4:5)]
-      names(Escape_colors) = c("AI","HLA_LOH","CHECKPOINT","CHECKPOINT_&_LOH","COMBINATION","NONE")
-
-      Tscore <- c("#E64B35FF","#4DBBD5FF","lightpink") # c(pal_npg(palette = c("nrc"), alpha = 1)(2),"lightpink")
-      names(Tscore) = c("high","low","medium")
-      c_neo <- c("#FEEDDE","#FDBE85","#FD8D3C","#E6550D","#A63603") #RColorBrewer::brewer.pal(name="Oranges",n=5)
-      names(c_neo) = c("0-10","10-50","50-100","100-500","500-1000")
-    
-      fabcolors <- list(Subtype = Subtype_colors,Escape=Escape_colors,Tcell_score=Tscore,Clonal_neoantigen_cat=c_neo)
-  }
   
-  Gistic <- read.delim("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes")
-  
+  gistic_all=fread("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes", header=TRUE)
+  gistic_all[1:2,1:10]
   
   types= unique(man$cancertype)
   types = c("COADREAD","UCEC","STAD")
  
    i <- "COADREAD"
-   types <- "COADREAD"
-
+   types <- c("UCEC")
+  i = "UCEC"
+ 
   for (i in types) {
     if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
 
     ccf_path = paste0(folder_path,"/CCF/",dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])
-
-    manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i) 
-
-    gistic <- Gistic %>%
-      melt(id=colnames(.)[1]) %>%
-      filter(value %in% c(-2,2)) %>%
-      mutate(value=factor(value,levels=c(-2,2),labels=c("homdel","hamp")),variable=gsub("[.]","-",substr(variable,1,12))) %>%
-      mutate(value=as.character(value)) %>%
-      dcast(Gene.Symbol~variable,value.var = "value") 
-    
-    gistic_path = paste0(folder_path,"/CNV/",i,"_gistic_mat.csv")
-    write.csv(gistic,file=gistic_path)
-  }
-  
-  for (i in types) {
-    if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
-
-    ccf_path = paste0(folder_path,"/CCF/",dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])
-
+   
     manSelect <- read.csv(Esig_path) %>% 
       filter(cancertype ==i,subtype %in% c("ESig3","ESig4")) 
-    manSelect$HLA = 
+    
+    # get gistic data 
+    # XenaGenerate(subset = XenaHostNames=="tcgaHub") %>% 
+    #     XenaFilter(filterDatasets = "CopyNumber") %>% 
+    #     XenaFilter(filterDatasets = "thresholded") %>% 
+    #     XenaFilter(filterDatasets = i) -> df_todo
+    # XenaQuery(df_todo) %>% XenaDownload() -> xe_download
+    # options(use_hiplot = TRUE)
+    # gistic = XenaPrepare(xe_download)  %>% as.data.frame()
+    #colnames(gistic)[1] = "sample"
+    
+    sample_col =  c("Sample",colnames(gistic_all)[which(substr(colnames(gistic_all)[-1],1,12) %in% manSelect$samplename)+1])
+    
+    gistic = #gistic # when download from url %>%
+        melt(gistic_all[,..sample_col],id.vars ="Sample")[value %in% c(-2,2)] %>%
+        mutate(value=factor(value,levels=c(-2,2),labels=c("homdel","hamp")),variable=substr(variable,1,12)) %>%
+        mutate(value=as.character(value)) 
 
-
-    gistic <- Gistic %>%
-      melt(id=colnames(.)[1]) %>%
-      filter(value %in% c(-2,2)) %>%
-      mutate(value=factor(value,levels=c(-2,2),labels=c("homdel","hamp")),variable=gsub("[.]","-",substr(variable,1,12))) %>%
-      mutate(value=as.character(value)) %>%
-      dcast(Gene.Symbol~variable,value.var = "value") 
     # Set top genes for co-occurrence analsysis, ccf types as the x axis and maximum p value filtered as network
     top_gene=30;ccf_type="median_ccf";p_value=0.05  # top_gene=50;ccf_type="mean_ccf";p_value=0.01
 
-    output_folder = paste0(folder_path,"Figures and Data/Concurrence_network_",Sys.Date(),"/")
+    output_folder = paste0(folder_path,"/Concurrence_network_",Sys.Date(),"/")
     if (!dir.exists(output_folder)) dir.create(output_folder)
     output=paste0(output_folder,i,"_ESig3,4_",top_gene,"genes_",ccf_type,"_",nrow(manSelect),"_samples_",p_value,".pdf")
     
+    { # Oncoplot Annotation Color
+      n_subtype = length(unique(manSelect$Subtype))
+      Subtype_colors <- c(c("#0072B5","orange","#29ad64","#7876B1","#4DBBD5FF","#FFDC91","#EE4C97","#BC3C29","springgreen3")[1:n_subtype],"grey70")
+      names(Subtype_colors ) <- sort(unique(manSelect$Subtype))
+      
+      Escape_colors <- c("#0072B5","orange","#29ad64","#7876B1","#4DBBD5FF","#FFDC91","#EE4C97","#BC3C29","springgreen3","grey70")[1:length(unique(manSelect$Escape))] #colorRampPalette(pal_jco("default", alpha = 1)(8))(9)[c(1,2,4:5)]
+      names(Escape_colors) = sort(unique(manSelect$Escape))
+
+      Tscore <- c("#E64B35FF","#4DBBD5FF","#FDBE85","grey70");names(Tscore) = c("high","low","medium")
+      POLE_col <- c("orange","#68cc95");names(POLE_col) <- c(TRUE,FALSE)
+      BLS_col <- c("orange","#68cc95");names(BLS_col) <- c(TRUE,FALSE)
+      MSI_col <- c("#20854E","#7912b9");names(MSI_col) <-  c("MSS","MSI-H")
+    }
 
     if (i %in% c("COADREAD","STAD","UCEC"))  {
-      oncoplot.feature=c("Subtype","Escape","Tcell_score")
-      oncoplot.feature=c("Subtype","Escape","Tcell_score","BLS.altered","POLE.altered","MSI")
-      manSelect
+      oncoplot.feature=c("Subtype","MSI_status","Escape","Tcell_score","BLS.altered","POLE.altered")
+      fabcolors <- list(Subtype = Subtype_colors,MSI_status=MSI_col,Escape=Escape_colors,Tcell_score=Tscore,POLE.altered=POLE_col,BLS.altered=BLS_col) 
+      bottom_feature = "Neoantigen_mutation"
     } else {
-      Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath)
+      oncoplot.feature=c("Subtype","MSI_status","POLE.altered","BLS.altered")
+      fabcolors <- list(Subtype = Subtype_colors,MSI_status=MSI_col,POLE.altered=POLE_col,BLS.altered=BLS_col) 
+      bottom_feature = NULL
     }
     
-
-   
-    Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature,oncoplot.feature.col=fabcolors)
-    
-    
+    Coocrrence_network_plot_MSI(types=i, manSelect= manSelect,gistic=gistic_type,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature,oncoplot.feature.col=fabcolors,
+     bottom_feature =bottom_feature)
+     
   }
 
   
@@ -147,33 +139,5 @@ editor_options:
 
   
   
-```
-```{r}
-POLE_sample = subset(manSelect,Subtype=="POLE")
-    MSS_sample = subset(manSelect,Subtype=="MSS")[1:6,]
-    MRR_sample = subset(manSelect,Subtype=="MMR")[1:6,]
-    example_sample = rbind(POLE_sample,MSS_sample,MRR_sample)
-    install.packages("ggh4x")
-    library(ggh4x)
-    ccf_filter %>% filter(samplename %in% example_sample$samplename) %>%
-      left_join(example_sample,by="samplename") %>%
-      mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) %>%
-      filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
-      ggplot()+geom_point(aes(x=ccube_ccf,y=Hugo_Symbol)) +
-      facet_nested(.~Subtype+samplename)+
-      #facet_grid(cols=vars(samplename))+
-      theme(axis.text.x = element_text(angle=90))+
-      labs(title="COADREAD-POLE",subtitle="ksByCancer")
-    
-    ccf_filter %>% filter(samplename %in% example_sample$samplename) %>%
-      left_join(example_sample,by="samplename") %>%
-      mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) %>%
-      filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
-      ggplot()+geom_boxplot(aes(x=ccube_ccf,y=Hugo_Symbol)) +
-      facet_nested(.~Subtype)+
-      #facet_grid(cols=vars(samplename))+
-      theme(axis.text.x = element_text(angle=90))+
-      labs(title="COADREAD-POLE",subtitle="ksByCancer")
-    
 ```
 

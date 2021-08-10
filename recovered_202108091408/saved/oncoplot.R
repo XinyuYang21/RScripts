@@ -101,8 +101,7 @@ oncoplot = oncoplot = function(maf, top = 20, minMut = NULL, genes = NULL, alter
                                genesToIgnore = NULL, removeNonMutated = TRUE, fill = TRUE, cohortSize = NULL,
                                colors = NULL, cBioPortal = FALSE, bgCol = "#CCCCCC", borderCol = 'white', annoBorderCol = NA, numericAnnoCol = NULL,
                                drawBox = FALSE, fontSize = 0.8, SampleNamefontSize = 1, titleFontSize = 1.5, legendFontSize = 1.2, annotationFontSize = 1.2,
-                               sepwd_genes = 0.5, sepwd_samples = 0.25, writeMatrix = FALSE, colbar_pathway = FALSE, showTitle = TRUE, titleText = NULL,
-                               bottom.feature="Clonal_neoantigen",bottom_barplot=FALSE){
+                               sepwd_genes = 0.5, sepwd_samples = 0.25, writeMatrix = FALSE, colbar_pathway = FALSE, showTitle = TRUE, titleText = NULL){
 
 
   #Total samples
@@ -397,7 +396,7 @@ oncoplot = oncoplot = function(maf, top = 20, minMut = NULL, genes = NULL, alter
 
   #Plot layout
   plot_layout(clinicalFeatures = clinicalFeatures, drawRowBar = drawRowBar, anno_height = anno_height,
-              drawColBar = drawColBar, draw_titv = draw_titv, exprsTbl = leftBarData, legend_height = legend_height,bottom_barplot = bottom_barplot)
+              drawColBar = drawColBar, draw_titv = draw_titv, exprsTbl = leftBarData, legend_height = legend_height)
 
   #01: Draw scale axis for left barplot table
   leftBarTitle = NULL
@@ -1019,41 +1018,7 @@ oncoplot = oncoplot = function(maf, top = 20, minMut = NULL, genes = NULL, alter
             font = 1, line = 0.4, cex = fontSize, las = 2, col = titv_col[4:6],  adj = 0.15)
     }
   }
-  #07-add
-  if (bottom_barplot) {
-    if(!is.null(leftBarData)){
-      plot.new()
-    }
-    
-    if(!drawRowBar){
-      par(mar = c(0, gene_mar, 0, 5), xpd = TRUE)
-    }else{
-      par(mar = c(0, gene_mar, 0, 3), xpd = TRUE)
-    }
-    
-    titv_dat = maf@clinical.data %>% as.data.frame() %>% .[,c("Tumor_Sample_Barcode",bottom.feature)]
-    data.table::setDF(x = titv_dat, rownames = as.character(titv_dat$Tumor_Sample_Barcode))
-    bottom_bar_data= t(as.numeric(titv_dat[colnames(numMat),-1])) 
-    colnames(bottom_bar_data) = colnames(numMat)
-    
-    plot(x = NA, y = NA, type = "n", xlim = c(0,ncol(bottom_bar_data)), ylim = c(0, max(bottom_bar_data,na.rm=TRUE)),
-         axes = FALSE, frame.plot = FALSE, xlab = NA, ylab = NA, xaxs = "i")
-    axis(side = 2, at = c(0, round(max(bottom_bar_data,na.rm=TRUE))), las = 2, line = 0.5)
-    
-    for(i in 1:ncol(bottom_bar_data)){
-      x = bottom_bar_data[,i]
-      if(length(x) > 0){
-        rect(xleft = i-1, ybottom = 0, xright = i-0.1,
-             ytop = x, col = "#FCD113FB", border = NA, lwd = 0)
-      }
-    } 
 
-    if(logColBar){
-      mtext(text = "(log10)", side = 2, line = 2, cex = 0.6)
-    }else{
-      mtext(text = "Subclonal Neoantigens", side = 2, line = 2, cex = 0.6)
-    }
-  }
   #08: Add legends
   par(mar = c(0, 0.5, 0, 0), xpd = TRUE)
 

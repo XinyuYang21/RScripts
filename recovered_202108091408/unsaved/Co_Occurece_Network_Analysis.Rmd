@@ -1,0 +1,169 @@
+---
+title: "Co_occurrence_network.rmd"
+output: html_document
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+  library(TCGAmutations)
+  library(tidyverse)
+  library(maftools)
+  devtools::install_github("ShixiangWang/maftools")
+
+  library(ComplexHeatmap)
+  library(TCGAmutations)
+  library(tidyverse)
+  library(magrittr)
+  library(maftools)
+  library(ComplexHeatmap)
+  library(gridExtra)
+  library(circlize)
+  library(ggsci)
+  library(RColorBrewer)
+  library(patchwork)
+  library(visNetwork)
+  library(igraph)
+  library(dplyr)
+  library(cooccur)
+  library(igraph)
+  library(qgraph)
+  library(scales) # rescale()
+  library(Hmisc)  # %nin%
+  library(ggraph)
+  library(tidyverse)
+  library(igraph)
+  library(ggraph)
+  library(graphlayouts)
+  library(ggforce)
+  library(scatterpie)
+  library(tidygraph) # activate
+  library(ggforce)
+  library(concaveman)
+  library(patchwork)
+  library(ggplotify)
+  #delete dplyr - #count
+
+  folder_path = "C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/"
+
+  source(paste0(folder_path,'Figures and Data/RScripts/oncomatrix.R'))
+  source(paste0(folder_path,'Figures and Data/RScripts/getInteractions.R'))
+  source(paste0(folder_path,'Figures and Data/RScripts/network_plot.R'))
+```
+
+## Run 
+
+```{r cars}
+
+  Esig_path = paste0(folder_path,"Figures and Data/ESigs_integrated_measure_4146_20210501.csv")
+  ks_path = paste0(folder_path,"Figures and Data/CCF_transition/gene_ks_fisher_table_4000_20210502.csv")
+  oncoPath <-  read.csv(paste0(folder_path,"Figures and Data/Oncogenic_pathways.csv"))
+  dir_all = dir(paste0(folder_path,"Figures and Data/CCF/"))
+  
+  types= unique(man$cancertype)
+  types = c("COADREAD","UCEC","STAD")
+ 
+
+  i = "UCEC"
+   types = "UCEC"
+  for (i in types) {
+    
+    if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
+    
+    # gene_filter <- read.csv(file=ks_path) %>%
+    #   filter(cancertype %in% paste0(sort(i),collapse  = "")) %>% 
+    #   filter(significant_ks == 1)
+    
+    # get ccf file for filtered samples
+    ccf_path = dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))]
+
+    manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i,subtype %in% c("ESig3","ESig4"))  %>%
+      mutate(Clonal_neoantigen_cat=cut(.$Clonal_neoantigen,breaks=c(0,10,50,100,500,1000),labels=c("0-10","10-50","50-100","100-500","500-1000")))
+    #manSelect <- read.csv(Esig_path) %>% filter(cancertype ==i,Subtype !="MSS") 
+    # Set top genes for co-occurrence analsysis, ccf types as the x axis and maximum p value filtered as network
+    top_gene=30;ccf_type="median_ccf";p_value=0.05
+    # top_gene=50;ccf_type="median_ccf";p_value=0.05
+    # top_gene=30;ccf_type="median_ccf";p_value=0.01
+    # top_gene=50;ccf_type="mean_ccf";p_value=0.01
+    # top_gene=50;ccf_type="mean_ccf";p_value=0.05
+    # top_gene=30;ccf_type="mean_ccf";p_value=0.05
+    # top_gene=30;ccf_type="mean_ccf";p_value=0.01
+    if (i %in% c("COADREAD","STAD","UCEC"))  {
+      oncoplot.feature=c("Subtype","Escape","Tcell_score","Clonal_neoantigen_cat")
+      Subtype_colors <-   colorRampPalette(pal_nejm("default", alpha = 1)(8))(8)[2:4]
+      Escape_colors <- c(colorRampPalette(pal_jco("default", alpha = 1)(8))(9)[c(1,2,4:5)],"springgreen3","grey40")
+      Tscore <- c(pal_npg(palette = c("nrc"), alpha = 1)(2),"lightpink")
+      c_neo <- RColorBrewer::brewer.pal(name="Oranges",n=5)
+     
+      scales::show_col(Escape_colors)
+      scales::show_col(Tscore)
+      names(Subtype_colors ) <- c("POLE","MSS","MMR")
+      names(Escape_colors) = c("AI","HLA_LOH","CHECKPOINT","CHECKPOINT_&_LOH","COMBINATION","NONE")
+      names(Tscore) = c("high","low","medium")
+      names(c_neo) = c("0-10","10-50","50-100","100-500","500-1000")
+      fabcolors <- list(Subtype = Subtype_colors,Escape=Escape_colors,Tcell_score=Tscore,Clonal_neoantigen_cat=c_neo)
+      } else
+      oncoplot.feature=NA
+    
+    
+  
+    
+    output_folder = paste0(folder_path,"Figures and Data/Concurrence_network_",Sys.Date(),"/")
+    if (!dir.exists(output_folder)) dir.create(output_folder)
+    output=paste0(output_folder,i,"_ESig3,4_",top_gene,"genes_",ccf_type,"_",nrow(manSelect),"_samples_",p_value,".pdf")
+    
+    Coocrrence_network_plot(types=i, manSelect= manSelect,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature,oncoplot.feature.col=fabcolors)
+    
+  }
+
+  
+      # Trevor.Graham.et.al <- read.delim("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Trevor Graham et al.txt")
+    # colnames(  Trevor.Graham.et.al)[1] = "samplename"
+  install.packages('alluvial')
+  library(alluvial)
+  library(reshape2)
+  grid.newpage()
+  data.grame(subtype=c("MMR","MSS","POLE"))
+  
+  ccf_all %>%
+    filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
+    mutate(Matched_Norm_Sample_Barcode=substr(Matched_Norm_Sample_Barcode,1,12)) %>%
+    left_join(oncoPath,by=c("Hugo_Symbol"="Gene")) %>%
+    left_join(manSelect[,c("samplename","Subtype")],by=c("Matched_Norm_Sample_Barcode"="samplename")) %>%
+    select(Matched_Norm_Sample_Barcode,Pathway,Hugo_Symbol,ccube_ccf,Subtype) %>%
+    mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) 
+  
+   data.grame(subtype=c("MMR","MSS","POLE"),
+              RTK_RAS=)
+  
+  
+```
+```{r}
+POLE_sample = subset(manSelect,Subtype=="POLE")
+    MSS_sample = subset(manSelect,Subtype=="MSS")[1:6,]
+    MRR_sample = subset(manSelect,Subtype=="MMR")[1:6,]
+    example_sample = rbind(POLE_sample,MSS_sample,MRR_sample)
+    install.packages("ggh4x")
+    library(ggh4x)
+    ccf_filter %>% filter(samplename %in% example_sample$samplename) %>%
+      left_join(example_sample,by="samplename") %>%
+      mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) %>%
+      filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
+      ggplot()+geom_point(aes(x=ccube_ccf,y=Hugo_Symbol)) +
+      facet_nested(.~Subtype+samplename)+
+      #facet_grid(cols=vars(samplename))+
+      theme(axis.text.x = element_text(angle=90))+
+      labs(title="COADREAD-POLE",subtitle="ksByCancer")
+    
+    ccf_filter %>% filter(samplename %in% example_sample$samplename) %>%
+      left_join(example_sample,by="samplename") %>%
+      mutate(ccube_ccf=ifelse(ccube_ccf>1,1,ccube_ccf)) %>%
+      filter(Hugo_Symbol %in% ksByCancer$Gene) %>%
+      ggplot()+geom_boxplot(aes(x=ccube_ccf,y=Hugo_Symbol)) +
+      facet_nested(.~Subtype)+
+      #facet_grid(cols=vars(samplename))+
+      theme(axis.text.x = element_text(angle=90))+
+      labs(title="COADREAD-POLE",subtitle="ksByCancer")
+    
+```
+
