@@ -459,16 +459,16 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,gistic=NULL,ks_path,ccf_
   # ESig3 - Gene Network
   grid.newpage()
   popfunction(p1,position="x = 0, y=1,width = 0.25,height = 0.25")       # ESig4 - Gene Network
-  if (MSS4) popfunction(p11,position="x = 0, y=0.75,width = 0.2,height = 0.2")    # ESig4 - Subtype1 Gene Network
-  if (MMR4) popfunction(p12,position="x = .2, y=0.75,width = 0.2,height = 0.2")   # ESig4 - Subtype2 Gene Network
-  if (POLE4) popfunction(p13,position="x = .4, y=0.75,width = 0.2,height = 0.2")   # ESig4 - Subtype3 Gene Network
+  if (MSS4) popfunction(p11,position="x = 0, y=0.75,width = 0.16,height = 0.2")    # ESig4 - Subtype1 Gene Network
+  if (MMR4) popfunction(p12,position="x = .17, y=0.75,width = 0.16,height = 0.2")   # ESig4 - Subtype2 Gene Network
+  if (POLE4) popfunction(p13,position="x = .34, y=0.75,width = 0.16,height = 0.2")   # ESig4 - Subtype3 Gene Network
   if (pathway4) popfunction(p5,position="x = 0.25, y=1,width = 0.3,height = 0.25")     # ESig4 - Pathway Network
   popfunction(p31,position="x = 0.5, y=1,width = 0.5,height = 0.25")    # ESig4 - Gene Oncoplot
   popfunction(p32,position="x = 0.5, y=0.75,width = 0.5,height = 0.25") # ESig4 - Pathway Oncoplot
   popfunction(p2,position="x = 0, y=0.5,width = 0.25,height = 0.25")     # ESig3 - Gene Network
-  if (MSS3) popfunction(p21,position="x = 0, y=0.25,width = 0.2,height = 0.2")    # ESig3 - Subtype1 Gene Network
-  if (MMR3) popfunction(p22,position="x = .2, y=0.25,width = 0.2,height = 0.2")   # ESig3 - Subtype2 Gene Network
-  if (POLE3) popfunction(p23,position="x = .4, y=0.25,width = 0.2,height = 0.2")   # ESig3 - Subtype3 Gene Network
+  if (MSS3) popfunction(p21,position="x = 0, y=0.25,width = 0.16,height = 0.2")    # ESig3 - Subtype1 Gene Network
+  if (MMR3) popfunction(p22,position="x = .17, y=0.25,width = 0.16,height = 0.2")   # ESig3 - Subtype2 Gene Network
+  if (POLE3) popfunction(p23,position="x = .34, y=0.25,width = 0.16,height = 0.2")   # ESig3 - Subtype3 Gene Network
   if (pathway3) popfunction(p6,position="x = 0.25, y=0.5,width = 0.3,height = 0.25")   # ESig3 - Pathway Network
   popfunction(p41,position="x = 0.5, y=0.5,width = 0.5,height = 0.25")  # ESig3 - Gene Oncoplot
   popfunction(p42,position="x = 0.5, y=0.25,width = 0.5,height = 0.25") # ESig3 - Pathway Oncoplot

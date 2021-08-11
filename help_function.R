@@ -286,8 +286,10 @@ load_ccf <- function(samplename,input){
   suppressWarnings(rm(ssm,res,ccubeRes))
   
   format <- paste0(input,samplename,"/ccubeRes.RData")
+  format1 <- paste0(input,samplename,".csv")
   
-  if (file.exists(format )) load_ssm = get(load(format4)) 
+  if (file.exists(format)) load_ssm = get(load(format4)) else
+    if (file.exists(format1)) load_ssm = read.csv(file=format1)[,-1]
   return(load_ssm$ssm) 
 }
 

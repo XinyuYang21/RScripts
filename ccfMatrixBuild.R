@@ -1,3 +1,20 @@
+#' Load multiple format ccf file
+#' @name load_ccf
+#' @param samplename cancer type
+#' @param input 
+#' @export
+#' @return ssm
+load_ccf <- function(samplename,input){
+  suppressWarnings(rm(ssm,res,ccubeRes))
+  
+  format <- paste0(input,samplename,"/ccubeRes.RData")
+  format1 <- paste0(input,samplename)
+  
+  if (file.exists(format)) load_ssm = get(load(format4))$ssm else
+    if (file.exists(format1)) load_ssm = read.csv(file=format1)[,-1]
+  
+  return(load_ssm) 
+}
 
 #' Build count matrix for input samples
 #' @name Build_post_summary
@@ -17,9 +34,9 @@ Build_post_summary <- function(input,output=NA, typefile=NA,minsample=30,multico
   }
   
 
-  post_summary_analyse_tcga <- function(samplename,TCGA=F,ICGC=F){
+  post_summary_analyse_tcga <- function(samplename){
     
-    colnames <- c("samplename","Tumor_Sample_Barcode","n_mutations","ave_depth","ccf_0-1_percentage","ccf_0-2_percentage","Ncluster","purity","ccube_purity","ccf_mean_cluster1","ccf_mean_cluster2","ccf_mean_cluster3","ccf_mean_cluster4","ccf_mean_cluster5")
+    colnames <- c("samplename","Tumor_Sample_Barcode","n_mutations","ave_depth","mut_ccf_0_0.5","mut_ccf_0_0.8","mut_ccf_0_1","mut_ccf_0_2","Ncluster","purity","ccube_purity","ccf_mean_cluster1","ccf_mean_cluster2","ccf_mean_cluster3","ccf_mean_cluster4","ccf_mean_cluster5")
     
     ssm <- load_ccf(samplename,input=input)
     ccf <- unique(ssm$ccube_ccf_mean)
@@ -29,13 +46,15 @@ Build_post_summary <- function(input,output=NA, typefile=NA,minsample=30,multico
     
     post_summary <- data.frame(samplename <- samplename) %>%
       mutate(
-        Tumor_Sample_Barcode = unique(ssm$Tumor_Sample_Barcode),
+        Tumor_Sample_Barcode = ifelse(is.null(unique(ssm$Tumor_Sample_Barcode)),substr(samplename,1,12),unique(ssm$Tumor_Sample_Barcode)),
         n_mutations = nrow(ssm),
         ave_deapth <-ave_deapth,
-        ccf_01_percentage = mean(ssm$ccube_ccf<=1),
-        ccf_02_percentage = mean(ssm$ccube_ccf<=2),
+        mut_ccf_0_0.5 = nrow(ssm[ssm$ccube_ccf<=0.5,]),
+        mut_ccf_0_0.8 = nrow(ssm[ssm$ccube_ccf<=0.8,]),
+        mut_ccf_0_1 = nrow(ssm[ssm$ccube_ccf<=1,]),
+        mut_ccf_0_2 = nrow(ssm[ssm$ccube_ccf<=2,]),
         Ncluster = Ncluster,
-        purity = unique(ssm$purity),
+        purity = min(unique(ssm$purity)),
         ccube_purity = ifelse(exists("ssm$ccube_purity"),unique(ssm$ccube_purity),NA),
         ccf_mean_cluster1 = ifelse(Ncluster>=1,ccf_mean_order[1],0),
         ccf_mean_cluster2 = ifelse(Ncluster>=2,ccf_mean_order[2],0),
@@ -53,6 +72,8 @@ Build_post_summary <- function(input,output=NA, typefile=NA,minsample=30,multico
     colnames <- c("samplename","n_mutations","ave_depth","ccf_0-1_percentage","ccf_0-2_percentage","Ncluster","purity","ccube_purity","ccf_mean_cluster1","ccf_mean_cluster2","ccf_mean_cluster3","ccf_mean_cluster4","ccf_mean_cluster5")
     
     ssm <- load_ccf(samplename,input=input)
+    
+    
     ccf <- unique(ssm$ccube_ccf_mean)
     ccf_mean_order <- sort(ccf,decreasing = T)
     Ncluster <- length(ccf)
@@ -65,7 +86,7 @@ Build_post_summary <- function(input,output=NA, typefile=NA,minsample=30,multico
           ccf_01_percentage = mean(ssm$ccube_ccf<=1),
           ccf_02_percentage = mean(ssm$ccube_ccf<=2),
           Ncluster = Ncluster,
-          purity = unique(ssm$purity),
+          purity = min(unique(ssm$purity)),
           ccube_purity = ifelse(exists("ssm$ccube_purity"),unique(ssm$ccube_purity),NA),
           ccf_mean_cluster1 = ifelse(Ncluster>=1,ccf_mean_order[1],0),
           ccf_mean_cluster2 = ifelse(Ncluster>=2,ccf_mean_order[2],0),
@@ -79,14 +100,17 @@ Build_post_summary <- function(input,output=NA, typefile=NA,minsample=30,multico
   }
   
   sample_list <- dir(input)
+
   
- 
   n_sample <- nrow(sample_list)
   
   #if (multicore) post_summary <- do.call(rbind,foreach(1:n_sample) %dopar% post_summary_analyse(sample_list[i]))
   if (TCGA) post_summary <- do.call(rbind,lapply(sample_list,post_summary_analyse_tcga))
   if (ICGC) post_summary <- do.call(rbind,lapply(sample_list,post_summary_analyse_icgc))
   
+  
+
+  #samplename = sample_list[1]
   # add type variable
   if ( (!is.na(typefile) & !TCGA) | (!is.na(typefile) & !ICGC) ) 
     cancertype <- read.csv(file=typefile)[,-1] 
