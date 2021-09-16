@@ -46,10 +46,13 @@ editor_options:
   library(UCSCXenaTools)
 
   folder_path = "C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Figures and Data/" # nolint
+  folder_path = "D:/Project/Work/Phd/202109 Evolution_xinyu/Evolution/GlasgowCancerEvolution/Figures and Data/" # Dell
 
   source(paste0(folder_path,"RScripts/oncomatrix.R"))
   source(paste0(folder_path,"RScripts/getInteractions.R"))
   source(paste0(folder_path,"RScripts/network_plot.R"))
+  source(paste0(folder_path,"RScripts/oncoplot.R"))
+ 
 ```
 
 ## Run 
@@ -57,9 +60,12 @@ editor_options:
 ```{r cars}
 
   Esig_path <- paste0(folder_path,"ESigs_integrated_measure_4146_20210501.csv")
+  Esig_path <- paste0(folder_path,"post_summary_esig34_7442_20210816.csv")
+
   ks_path = paste0(folder_path,"CCF_transition/gene_ks_fisher_table_4000_20210502.csv")
   oncoPath <-  read.csv(paste0(folder_path,"Oncogenic_pathways.csv"))
-  dir_all = dir(paste0(folder_path,"CCF/"))
+  dir_all = dir(paste0(folder_path,"CCF_9000/min_mut_30/"))
+  ccf_folder = paste0(folder_path,"CCF_9000/min_mut_30/")
   
   
   gistic_all=fread("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes", header=TRUE)
@@ -75,7 +81,7 @@ editor_options:
   for (i in types) {
     if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
 
-    ccf_path = paste0(folder_path,"/CCF/",dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])
+    ccf_path = paste0(ccf_folder,dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])[1]
    
     manSelect <- read.csv(Esig_path) %>% 
       filter(cancertype ==i,subtype %in% c("ESig3","ESig4")) 
@@ -96,7 +102,7 @@ editor_options:
         melt(gistic_all[,..sample_col],id.vars ="Sample")[value %in% c(-2,2)] %>%
         mutate(value=factor(value,levels=c(-2,2),labels=c("homdel","hamp")),variable=substr(variable,1,12)) %>%
         mutate(value=as.character(value)) 
-
+    gistic = NULL
     # Set top genes for co-occurrence analsysis, ccf types as the x axis and maximum p value filtered as network
     top_gene=30;ccf_type="median_ccf";p_value=0.05  # top_gene=50;ccf_type="mean_ccf";p_value=0.01
 
@@ -120,15 +126,15 @@ editor_options:
 
     if (i %in% c("COADREAD","STAD","UCEC"))  {
       oncoplot.feature=c("Subtype","MSI_status","Escape","Tcell_score","BLS.altered","POLE.altered")
-      fabcolors <- list(Subtype = Subtype_colors,MSI_status=MSI_col,Escape=Escape_colors,Tcell_score=Tscore,POLE.altered=POLE_col,BLS.altered=BLS_col) 
+      oncoplot.feature.col <- list(Subtype = Subtype_colors,MSI_status=MSI_col,Escape=Escape_colors,Tcell_score=Tscore,POLE.altered=POLE_col,BLS.altered=BLS_col) 
       bottom_feature = "Neoantigen_mutation"
     } else {
       oncoplot.feature=c("Subtype","MSI_status","POLE.altered","BLS.altered")
-      fabcolors <- list(Subtype = Subtype_colors,MSI_status=MSI_col,POLE.altered=POLE_col,BLS.altered=BLS_col) 
+      oncoplot.feature.col <- list(Subtype = Subtype_colors,MSI_status=MSI_col,POLE.altered=POLE_col,BLS.altered=BLS_col) 
       bottom_feature = NULL
     }
     
-    Coocrrence_network_plot_MSI(types=i, manSelect= manSelect,gistic=gistic_type,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature,oncoplot.feature.col=fabcolors,
+    Coocrrence_network_plot_MSI(types=i, manSelect= manSelect,gistic= gistic,ks_path=ks_path,ccf_path=ccf_path,output=output,top_gene=top_gene,p_value=p_value,ccf_type=ccf_type,oncoPath=oncoPath,oncoplot.feature=oncoplot.feature,oncoplot.feature.col=oncoplot.feature.col,
      bottom_feature =bottom_feature)
      
   }

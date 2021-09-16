@@ -5,6 +5,6 @@ extractLegend <- function(gg) {
 }
 
 # Extract wanted legend
-wantedLegend <- extractLegend(template)
+#wantedLegend <- extractLegend(template)
 # ####### Conver igraph to ggraph
 

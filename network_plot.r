@@ -49,7 +49,7 @@ net_to_layout <- function(net,node,simple=FALSE){
 
 ggraph_plot = function(nodes,edges,facet=FALSE,title="",fill=FALSE,zoom=NA,p_value,no_layout=FALSE,subtitle="") {
   
-  mypal <- colorRampPalette(pal_nejm("default", alpha = 0.8)(8))(18)
+  mypal <- colorRampPalette(ggsci::pal_nejm("default", alpha = 0.8)(8))(18)
   #scales::show_col(mypal)
   pathway_col <- data.frame(Pathway=c("Cell_Cycle", "Chromatin_modifiers", "Notch", "NRF2", "PI3K", "RTK_RAS", "TGF-Beta", "TP53", "WNT", "Hippo", "Myc",NA), col=c(mypal[c(1:8,10,15:16)],"grey70"))
   pathway_col_values <- pathway_col$col
@@ -127,35 +127,44 @@ ggraph_plot = function(nodes,edges,facet=FALSE,title="",fill=FALSE,zoom=NA,p_val
   p
 }
 
-mafToNodeEdges <- function(maf,ccf_filter,manSelect,gistic=NULL,ksByCancer,pathway=FALSE,top_gene,oncoplot.feature=NA,fabcolors=NA,oncoPath,bottom_barplot=TRUE,bottom_feature) {
+mafToNodeEdges <- function(maf,ccf_filter,manSelect,gistic=NULL,ksByCancer,pathway=FALSE,top_gene,oncoplot.feature=NA,
+                           fabcolors=NA,oncoPath,bottom_barplot=TRUE,bottom_feature) {
   
   mafTemp   <- maf@data
   clinicalTemp <- getSampleSummary(x = maf) %>%
     left_join(manSelect, by = c("Tumor_Sample_Barcode"="samplename")) %>%
     distinct(Tumor_Sample_Barcode,.keep_all = TRUE)
+  
   # Calculate Sample frequency
   geneccfFreq <- data.table(ccf_filter)[,ccube_ccf:=ifelse(ccube_ccf>=1,1,ccube_ccf)] %>%
       .[samplename %in% clinicalTemp$Tumor_Sample_Barcode & Variant_Classification %nin%  c('Translation_Start_Site') ] %>%
       inner_join(oncoPath, by=c("Hugo_Symbol"="Gene")) 
-
+  
+  # if gistic !- NUll, filter samples for CNV files
   if (!is.null(gistic)) gistic = subset(gistic,variable %in% getSampleSummary(x = maf)$Tumor_Sample_Barcode )
   
+  # specify whether to plot in pathway format
   if (pathway) {
+    
     mafTemp <- inner_join(mafTemp, oncoPath, by = c("Hugo_Symbol"="Gene"))
     colnames(mafTemp)[c(1,which(colnames(mafTemp)=="Pathway"))] <- c("Hugo_Symbol_Gene","Hugo_Symbol")
     
+    ## Merge clinical data
     mafClinical = read.maf(maf = mafTemp, clinicalData = clinicalTemp)
+    ## Co-occurrence Analysis
     res <- getInteractions(mafClinical, top=10, colPal = "PRGn", returnAll = TRUE, sigSymbolsSize=1.5)
-    
+    ## Calculate the median/mean cancer cell fraction for each pathway
     geneccfFreq = geneccfFreq %>%
       group_by(Pathway) %>%
       dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename))) 
     
     bottom.feature=NULL
+    
   } else {
+    
     mafClinical = read.maf(maf = mafTemp, clinicalData = clinicalTemp,cnTable = gistic)
     res <- getInteractions(maf, top=top_gene, colPal = "PRGn", returnAll = TRUE, sigSymbolsSize=1.5) 
- 
+    ## Calculate the median/mean cancer cell fraction for each gene
     geneccfFreq = geneccfFreq %>%
       group_by(Hugo_Symbol) %>%
       dplyr::summarise(mean_ccf=mean(ccube_ccf,na.rm=TRUE),median_ccf=median(ccube_ccf,na.rm=TRUE),n=length(unique(samplename)))  
@@ -164,9 +173,9 @@ mafToNodeEdges <- function(maf,ccf_filter,manSelect,gistic=NULL,ksByCancer,pathw
   geneccfFreq = data.table(geneccfFreq)[,freq:= n/nrow(clinicalTemp)]
   geneccfFreq[,freq_value:=cut(freq,breaks=c(seq(0,1,length.out=10)),labels=seq(15,50,length.out=9))]
   colnames(geneccfFreq)[1] = "label"
-
   top_genes = geneccfFreq %>% arrange(desc(freq)) %>% .$label %>% .[1:5] 
-    # Draw oncoplot
+  
+  # Draw oncoplot
   if (is.null(bottom_feature)) bottom_barplot = FALSE else bottom_barplot = TRUE
   p_oncoplot = as.ggplot(function()
       if (all(!is.na(oncoplot.feature))) {
@@ -270,7 +279,7 @@ Coocrrence_network_plot <- function(types,manSelect,gistic=NULL,ks_path,ccf_path
  
   # Load MAF
   if (types != "All") {
-    lstObject <- lapply(typesMaf, function(i) tcga_load(i))
+    lstObject <- lapply(typesMaf, function(i) TCGAmutations::tcga_load(i))
   } else {
     lstObject <- lapply(tcga_available()$Study_Abbreviation[1:33], function(i) tcga_load(i))
   }
@@ -338,7 +347,7 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,gistic=NULL,ks_path,ccf_
   
   if (nchar(types)==8) typesMaf = c(substr(types,1,4),substr(types,5,8)) else typesMaf = types
   
-  ksByCancer = fread(ks_path)[cancertype %in% paste0(sort(typesMaf),collapse  = "") & (significant_ks == 1|significant_fisher==1)]
+  ksByCancer = data.table::fread(ks_path)[cancertype %in% paste0(sort(typesMaf),collapse  = "") & (significant_ks == 1|significant_fisher==1)]
 
   #load ccf files
   for (j in 1:length(ccf_path) ) {
@@ -360,9 +369,8 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,gistic=NULL,ks_path,ccf_
 
   mergeMaf<- merge_mafs(lstObject)
   mergeMaf@data$Tumor_Sample_Barcode = substr(as.character(mergeMaf@data$Tumor_Sample_Barcode),1,12)
-  
   ## No filter
-  
+
   mafEsig4 <- subsetMaf(mergeMaf, tsb=subset(manSelect,subtype=="ESig4")$samplename, genes = geneCounts$Gene,
                         query = "Variant_Classification %nin%  c('Translation_Start_Site')")
 
@@ -399,7 +407,8 @@ Coocrrence_network_plot_MSI <- function(types,manSelect,gistic=NULL,ks_path,ccf_
                             query = "Variant_Classification %nin%  c('Translation_Start_Site')")
   POLE3 = TRUE } else {POLE3 = FALSE}                        
 
-  gistic = subset(gistic,Sample %in% geneCounts$Gene)
+  if (!is.null(gistic)) gistic = subset(gistic,Sample %in% geneCounts$Gene)
+  #gistic = NULL
   # Perform interaction analysis using oncogenic pathway data
   NodeEdges4=mafToNodeEdges(maf=mafEsig4,top_gene=30,manSelect=manSelect,gistic=gistic,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath,bottom_feature=bottom_feature)
   NodeEdges3=mafToNodeEdges(maf=mafEsig3,top_gene=30,manSelect=manSelect,gistic=gistic,ksByCancer=ksByCancer,ccf_filter=ccf_filter,oncoplot.feature=oncoplot.feature,fabcolors = oncoplot.feature.col,oncoPath=oncoPath,bottom_feature=bottom_feature)

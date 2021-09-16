@@ -247,7 +247,7 @@ ccfMatBuild <- function(samplelist,upper,input_folder,binwidth=0.01,add_samplena
 
 
 #' Build count matrix for input samples per cancer type
-#' @name ccfMatrixBuild
+#' @name ccfMatBuild_type
 #' @param post_summary samples' name
 #' @param ccfupper set CCF upper bound
 #' @param input_folder folder path stores ccf files 
@@ -257,7 +257,7 @@ ccfMatBuild <- function(samplelist,upper,input_folder,binwidth=0.01,add_samplena
 #' @return CCF matrix for each cancer type
 #' @export
 #' @import dplyr
-ccfMatBuild_output <- function(post_summary,input_folder,output=NA,ccfupper=1,RankEstimateType="fraction",add_samplename=TRUE,minsample=30){
+ccfMatBuild_type <- function(post_summary,input_folder,output=NA,ccfupper=1,RankEstimateType="fraction",add_samplename=TRUE,minsample=30){
   
       samplelist_all <- post_summary$samplename
       type <- post_summary %>% group_by(.data$cancertype)%>% summarize(n=n())
