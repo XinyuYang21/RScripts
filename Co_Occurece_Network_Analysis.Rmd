@@ -58,33 +58,42 @@ editor_options:
 ## Run 
 
 ```{r cars}
-
-  Esig_path <- paste0(folder_path,"ESigs_integrated_measure_4146_20210501.csv")
-  Esig_path <- paste0(folder_path,"post_summary_esig34_7442_20210816.csv")
-
+  
   ks_path = paste0(folder_path,"CCF_transition/gene_ks_fisher_table_4000_20210502.csv")
   oncoPath <-  read.csv(paste0(folder_path,"Oncogenic_pathways.csv"))
-  dir_all = dir(paste0(folder_path,"CCF_9000/min_mut_30/"))
+
+  ## 4146 files
+  Esig_path <- paste0(folder_path,"ESigs_integrated_measure_4146_20210501.csv")
+  ccf_folder = paste0(folder_path,"CCF_typewise_4146/")
+  dir_all = dir(paste0(folder_path,"CCF_typewise_4146/"))
+  
+  ## 7442 files
+  Esig_path <- paste0(folder_path,"post_summary_esig34_7442_20210816.csv")
   ccf_folder = paste0(folder_path,"CCF_9000/min_mut_30/")
+  dir_all = dir(paste0(folder_path,"CCF_9000/min_mut_30/"))
   
-  
+  ## if consider copy number alterations
   gistic_all=fread("C:/Users/PC/Desktop/Xinyu/Evolution/GlasgowCancerEvolution/Archive/Data/TCGA/Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes", header=TRUE)
   gistic_all[1:2,1:10]
   
+  ## Specify cancer type of interest
   types= unique(man$cancertype)
   types = c("COADREAD","UCEC","STAD")
  
    i <- "COADREAD"
    types <- c("UCEC")
   i = "UCEC"
- 
+  
+  ## run PAN-CAN Analysis
   for (i in types) {
     if (nchar(i)==8) typesMaf = c(substr(i,1,4),substr(i,5,8)) else typesMaf = i
 
     ccf_path = paste0(ccf_folder,dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])[1]
-   
+
     manSelect <- read.csv(Esig_path) %>% 
-      filter(cancertype ==i,subtype %in% c("ESig3","ESig4")) 
+      filter(cancertype ==i,subtype %in% c("ESig3","ESig4")) %>% 
+      mutate(Tumor_Sample_Barcode=samplename) %>%
+      distinct(samplename, .keep_all = TRUE)
     
     # get gistic data 
     # XenaGenerate(subset = XenaHostNames=="tcgaHub") %>% 
