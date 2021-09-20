@@ -1141,3 +1141,200 @@ oncoplot = oncoplot = function(maf, top = 20, minMut = NULL, genes = NULL, alter
     }
   }
 }
+
+read.maf = function(maf, clinicalData = NULL, removeDuplicatedVariants = TRUE, useAll = TRUE, gisticAllLesionsFile = NULL, gisticAmpGenesFile = NULL,
+                    gisticDelGenesFile = NULL, gisticScoresFile = NULL, cnLevel = 'all', cnTable = NULL, isTCGA = FALSE, vc_nonSyn = NULL, verbose = TRUE){
+  
+  #1. Read MAF if its a file or convert to data.table if its data.frame
+  start_time = proc.time()
+  if (is.data.frame(x = maf)) {
+    #maf  = data.table::as.data.table(maf)
+   
+  } else{
+    if (verbose) {
+      cat('-Reading\n')
+    }
+    
+    maf <-
+      data.table::fread(
+        file = maf,
+        sep = "\t",
+        stringsAsFactors = FALSE,
+        verbose = FALSE,
+        data.table = TRUE,
+        showProgress = TRUE,
+        header = TRUE,
+        fill = TRUE,
+        skip = "Hugo_Symbol",
+        quote = ""
+      )
+    
+    # if(as.logical(length(grep(pattern = 'gz$', x = maf, fixed = FALSE)))){
+    #   #If system is Linux use fread, else use gz connection to read gz file.
+    #   if(Sys.info()[['sysname']] == 'Windows'){
+    #     maf.gz = gzfile(description = maf, open = 'r')
+    #     suppressWarnings(maf <- data.table::as.data.table(read.csv(file = maf.gz, header = TRUE, sep = '\t', stringsAsFactors = FALSE, comment.char = "#")))
+    #     close(maf.gz)
+    #   } else{
+    #     maf = suppressWarnings(data.table::fread(cmd = paste('zcat <', maf), sep = '\t', stringsAsFactors = FALSE, verbose = FALSE, data.table = TRUE, showProgress = TRUE, header = TRUE, fill = TRUE, skip = "Hugo_Symbol", quote = ""))
+    #   }
+    # } else{
+    #   suppressWarnings(maf <- data.table::fread(input = maf, sep = "\t", stringsAsFactors = FALSE, verbose = FALSE, data.table = TRUE, showProgress = TRUE, header = TRUE, fill = TRUE, skip = "Hugo_Symbol", quote = ""))
+    # }
+  }
+  
+  #2. validate MAF file
+  if(verbose){
+    cat("-Validating\n")
+  }
+  maf = validateMaf(maf = maf, isTCGA = isTCGA, rdup = removeDuplicatedVariants, chatty = verbose)
+  
+  #3. validation check for variants classified as Somatic in Mutation_Status field.
+  if(!useAll){
+    cat('--Using only `Somatic` variants from Mutation_Status. Set useAll = TRUE to include everything.')
+    if(length(colnames(maf)[colnames(x = maf) %in% 'Mutation_Status']) > 0){
+      maf = maf[Mutation_Status %in% "Somatic"]
+      if(nrow(maf) == 0){
+        stop('No more Somatic mutations left after filtering for Mutation_Status! Maybe set useAll to TRUE ?')
+      }
+    }else{
+      cat('Mutation_Status not found. Assuming all variants are Somatic and validated\n')
+    }
+  }
+  
+  #4. Seperate synonymous variants from non-syn variants
+  #Variant Classification with Low/Modifier variant consequences. http://asia.ensembl.org/Help/Glossary?id=535
+  if(is.null(vc_nonSyn)){
+    vc.nonSilent = c("Frame_Shift_Del", "Frame_Shift_Ins", "Splice_Site", "Translation_Start_Site",
+                     "Nonsense_Mutation", "Nonstop_Mutation", "In_Frame_Del",
+                     "In_Frame_Ins", "Missense_Mutation")
+  }else{
+    vc.nonSilent = vc_nonSyn
+  }
+  # silent = c("3'UTR", "5'UTR", "3'Flank", "Targeted_Region", "Silent", "Intron",
+  #            "RNA", "IGR", "Splice_Region", "5'Flank", "lincRNA", "De_novo_Start_InFrame", "De_novo_Start_OutOfFrame", "Start_Codon_Ins", "Start_Codon_SNP", "Stop_Codon_Del")
+  #Variant Classification with High/Moderate variant consequences. http://asia.ensembl.org/Help/Glossary?id=535
+  
+  
+  maf.silent = maf[!Variant_Classification %in% vc.nonSilent] #Silent variants
+  if(nrow(maf.silent) > 0){
+    maf.silent.vc = maf.silent[,.N, .(Tumor_Sample_Barcode, Variant_Classification)]
+    maf.silent.vc.cast = data.table::dcast(data = maf.silent.vc, formula = Tumor_Sample_Barcode ~ Variant_Classification, fill = 0, value.var = 'N') #why dcast is not returning it as data.table ?
+    summary.silent = data.table::data.table(ID = c('Samples',colnames(maf.silent.vc.cast)[2:ncol(maf.silent.vc.cast)]),
+                                            N = c(nrow(maf.silent.vc.cast), colSums(maf.silent.vc.cast[,2:ncol(maf.silent.vc.cast), with = FALSE])))
+    
+    maf = maf[Variant_Classification %in% vc.nonSilent] #Choose only non-silent variants from main table
+    if(verbose){
+      cat(paste0('-Silent variants: ', nrow(maf.silent)), '\n')
+      #print(summary.silent)
+    }
+  }
+  
+  if(nrow(maf) == 0){
+    stop("No non-synonymous mutations found\nCheck `vc_nonSyn`` argumet in `read.maf` for details")
+  }
+  
+  #5. Process CN data if available.
+  if(!is.null(gisticAllLesionsFile)){
+    gisticIp = readGistic(gisticAllLesionsFile = gisticAllLesionsFile, gisticAmpGenesFile = gisticAmpGenesFile,
+                          gisticDelGenesFile = gisticDelGenesFile, isTCGA = isTCGA, gisticScoresFile = gisticScoresFile, cnLevel = cnLevel, verbose = verbose)
+    gisticIp = gisticIp@data
+    
+    suppressWarnings(gisticIp[, id := paste(Hugo_Symbol, Tumor_Sample_Barcode, sep=':')])
+    gisticIp = gisticIp[!duplicated(id)]
+    gisticIp[,id := NULL]
+    
+    maf = data.table::rbindlist(list(maf, gisticIp), fill = TRUE, use.names = TRUE)
+    maf$Tumor_Sample_barcode = factor(x = maf$Tumor_Sample_barcode,
+                                      levels = unique(c(levels(maf$Tumor_Sample_barcode), unique(as.character(gisticIp$Tumor_Sample_barcode)))))
+    
+    #oncomat = createOncoMatrix(maf, chatty = verbose)
+  }else if(!is.null(cnTable)){
+    if(verbose){
+      cat('-Processing copy number data\n')
+    }
+    if(is.data.frame(cnTable)){
+      cnDat = data.table::copy(cnTable)
+      data.table::setDT(x = cnDat)
+    }else{
+      cnDat = data.table::fread(input = cnTable, sep = '\t', stringsAsFactors = FALSE, header = TRUE, colClasses = 'character')
+    }
+    colnames(cnDat) = c('Hugo_Symbol', 'Tumor_Sample_Barcode', 'Variant_Classification')
+    if(isTCGA){
+      cnDat[,Tumor_Sample_Barcode := substr(x = cnDat$Tumor_Sample_Barcode, start = 1, stop = 12)]
+    }
+    cnDat$Variant_Type = 'CNV'
+    suppressWarnings(cnDat[, id := paste(Hugo_Symbol, Tumor_Sample_Barcode, sep=':')])
+    cnDat = cnDat[!duplicated(id)]
+    cnDat[,id := NULL]
+    maf = data.table::rbindlist(l = list(maf, cnDat), fill = TRUE, use.names = TRUE)
+    maf$Tumor_Sample_barcode = factor(x = maf$Tumor_Sample_barcode,
+                                      levels = unique(c(levels(maf$Tumor_Sample_barcode), unique(as.character(cnDat$Tumor_Sample_barcode)))))
+  }
+  
+  #Set factors
+  maf$Variant_Classification = as.factor(as.character(maf$Variant_Classification))
+  maf$Variant_Type = as.factor(as.character(maf$Variant_Type))
+  
+  if(verbose){
+    cat('-Summarizing\n')
+  }
+  mafSummary = summarizeMaf(maf = maf, anno = clinicalData, chatty = verbose)
+  
+  
+  #7. Create MAF object
+  m = MAF(data = maf, variants.per.sample = mafSummary$variants.per.sample, variant.type.summary = mafSummary$variant.type.summary,
+          variant.classification.summary = mafSummary$variant.classification.summary, gene.summary = mafSummary$gene.summary,
+          summary = mafSummary$summary, maf.silent = maf.silent, clinical.data = mafSummary$sample.anno)
+  #m = mafSetKeys(maf = m)
+  
+  if(verbose){
+    cat("-Finished in",data.table::timetaken(start_time),"\n")
+  }
+  
+  return(m)
+}
+################
+geom_scatterpie <- function(mapping=NULL, data, cols, pie_scale = 1, sorted_by_radius = FALSE, legend_name = "type", long_format=FALSE, ...) {
+  if (is.null(mapping))
+    mapping <- aes_(x = ~x, y = ~y)
+  mapping <- modifyList(mapping,
+                        aes_(r0 = 0,
+                             fill = as.formula(paste0("~", legend_name)),
+                             amount=~value)
+  )
+  
+  if (!'r' %in% names(mapping)) {
+    xvar <- get_aes_var(mapping, "x")
+    size <- diff(range(data[, xvar]))/ 50 * pie_scale
+    data$r <- size
+    mapping <- modifyList(mapping, aes_(r=size))
+  }
+  
+  names(mapping)[match(c("x", "y"), names(mapping))] <- c("x0", "y0")
+  if(long_format==TRUE){
+    df <- data
+    names(df)[which(names(df) == cols)] = legend_name
+    cols2 <- enquo(cols)
+  } else{
+    data <- data[rowSums(data[, cols]) > 0, ]
+    ## df <- gather_(data, "type", "value", cols)
+    cols2 <- enquo(cols)
+    df <- gather(data, "type", "value", !!cols2)
+    df$type <- factor(df$type, levels = cols) # set legend order based on order of "cols"      
+    names(df)[which(names(df) == "type")] = legend_name
+  }
+  ## df <- gather_(data, "type", "value", cols)
+  # cols2 <- enquo(cols)
+  # df <- gather(data, "type", "value", !!cols2)
+  # names(df)[which(names(df) == "type")] = legend_name
+  
+  ## df$type <- factor(df$type, levels=cols)
+  if (!sorted_by_radius) {
+    return(geom_arc_bar(mapping, data=df, stat='pie', inherit.aes=FALSE, ...))
+  }
+  
+  lapply(split(df, df$r)[as.character(sort(unique(df$r), decreasing=TRUE))], function(d) {
+    geom_arc_bar(mapping, data=d, stat='pie', inherit.aes=FALSE, ...)
+  })
+}

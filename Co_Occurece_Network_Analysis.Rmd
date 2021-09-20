@@ -90,10 +90,8 @@ editor_options:
 
     ccf_path = paste0(ccf_folder,dir_all[sapply(typesMaf,function(x) which(grepl(x,dir_all)))])[1]
 
-    manSelect <- read.csv(Esig_path) %>% 
-      filter(cancertype ==i,subtype %in% c("ESig3","ESig4")) %>% 
-      mutate(Tumor_Sample_Barcode=samplename) %>%
-      distinct(samplename, .keep_all = TRUE)
+    manSelect <- data.table::fread(Esig_path)[cancertype==i & subtype %in% c("ESig3","ESig4")][,Tumor_Sample_Barcode:=samplename][!duplicated(Tumor_Sample_Barcode)]
+      
     
     # get gistic data 
     # XenaGenerate(subset = XenaHostNames=="tcgaHub") %>% 
