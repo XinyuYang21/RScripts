@@ -120,6 +120,8 @@ editor_options:
     { # Oncoplot Annotation Color
       n_subtype = length(unique(manSelect$Subtype))
       Subtype_colors <- c(c("#0072B5","orange","#29ad64","#7876B1","#4DBBD5FF","#FFDC91","#EE4C97","#BC3C29","springgreen3")[1:n_subtype],"grey70")
+     
+      names(subtype_var_col) = subtype_var_content
       names(Subtype_colors ) <- sort(unique(manSelect$Subtype))
       
       Escape_colors <- c("#0072B5","orange","#29ad64","#7876B1","#4DBBD5FF","#FFDC91","#EE4C97","#BC3C29","springgreen3","grey70")[1:length(unique(manSelect$Escape))] #colorRampPalette(pal_jco("default", alpha = 1)(8))(9)[c(1,2,4:5)]
@@ -132,6 +134,12 @@ editor_options:
     }
 
     if (i %in% c("COADREAD","STAD","UCEC"))  {
+      show_col(Subtype_colors)
+      #Subtype_colors=c("#EAD7B8","#83C5BE","#006d77")
+      Subtype_colors=c("#EAD7B8","#83C5BE","#E0F0F5")
+      #Subtype_colors=c("#FFA500","#909cc2","#0072B5")
+      names(Subtype_colors) = c("MMR","MSS","POLE")
+      
       oncoplot.feature=c("Subtype","MSI_status","Escape","Tcell_score","BLS.altered","POLE.altered")
       oncoplot.feature.col <- list(Subtype = Subtype_colors,MSI_status=MSI_col,Escape=Escape_colors,Tcell_score=Tscore,POLE.altered=POLE_col,BLS.altered=BLS_col) 
       bottom_feature = "Neoantigen_mutation"
